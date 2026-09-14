@@ -39,6 +39,7 @@ export default function AppRoutes() {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <Routes>
+          <Route path="/" element={<Navigate to="/admin/login" replace />} />
 
           {/* Student Routes */}
           <Route path="/student">
