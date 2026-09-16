@@ -66,6 +66,12 @@ function AccountInfo({ open, handleClose, selectedAccount }) {
               <strong>Role:</strong> {capitalize(officer.role)}
             </Typography>
             <Typography variant="body2">
+              <strong>Year:</strong> {officer.year || "N/A"}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Section:</strong> {officer.section || "N/A"}
+            </Typography>
+            <Typography variant="body2">
               <strong>Can Add:</strong> {officer.can_add ? "Yes" : "No"}
             </Typography>
             <Typography variant="body2">
@@ -75,7 +81,8 @@ function AccountInfo({ open, handleClose, selectedAccount }) {
               <strong>Can Delete:</strong> {officer.can_delete ? "Yes" : "No"}
             </Typography>
             <Typography variant="body2">
-              <strong>Can Moderate:</strong> {officer.can_moderate ? "Yes" : "No"}
+              <strong>Can Moderate:</strong>{" "}
+              {officer.can_moderate ? "Yes" : "No"}
             </Typography>
             <Typography variant="body2">
               <strong>Date Created:</strong> {formatDate(officer.date_created)}

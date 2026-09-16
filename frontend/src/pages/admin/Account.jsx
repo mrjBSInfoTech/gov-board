@@ -49,7 +49,6 @@ export default function Dashboard() {
   const [snackbarSeverity, setSnackbarSeverity] = useState("success");
   const [loading, setLoading] = useState(true);
 
-
   // Fetch all accounts from API
   const loadAccounts = async () => {
     try {
@@ -124,10 +123,7 @@ export default function Dashboard() {
       showSnackbar("Account deleted successfully", "success");
     } catch (err) {
       console.error("Error deleting account:", err, "error");
-      setAccountErrorMessage(
-        err.message || "Error deleting account",
-        "error",
-      );
+      setAccountErrorMessage(err.message || "Error deleting account", "error");
     }
   };
 
@@ -157,7 +153,7 @@ export default function Dashboard() {
   return (
     <Box sx={{ p: 3 }}>
       <Helmet titleTemplate="%s - GovBoard">
-        <title>Account</title>
+        <title>Officials</title>
       </Helmet>
 
       {/* Header */}
@@ -173,7 +169,7 @@ export default function Dashboard() {
           variant="h4"
           sx={{ fontWeight: "bold", fontSize: { xs: 24, sm: 32 } }}
         >
-          Account
+          Officials
         </Typography>
 
         <Button
@@ -200,35 +196,31 @@ export default function Dashboard() {
         </Box>
       ) : accounts.length === 0 ? (
         <Box sx={{ textAlign: "center", mt: 6 }}>
-          <Typography color="text.secondary">
-            No officer accounts found.
-          </Typography>
+          <Typography color="text.secondary">No officials found.</Typography>
         </Box>
       ) : (
         <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
           <Table>
             <TableHead>
               <TableRow sx={{ "& th": { fontWeight: "bold" } }}>
-                <TableCell>#</TableCell>
                 <TableCell>Student Number</TableCell>
+                <TableCell>Position</TableCell>
+                <TableCell>Year</TableCell>
+                <TableCell>Section</TableCell>
                 <TableCell>First Name</TableCell>
                 <TableCell>Last Name</TableCell>
-                <TableCell>Date Created</TableCell>
                 <TableCell align="center">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {accounts.map((account, index) => (
+              {accounts.map((account) => (
                 <TableRow key={account.officer_id} hover>
-                  <TableCell>{index + 1}</TableCell>
                   <TableCell>{account.student_number}</TableCell>
+                  <TableCell>{account.position || "-"}</TableCell>
+                  <TableCell>{account.year || "-"}</TableCell>
+                  <TableCell>{account.section || "-"}</TableCell>
                   <TableCell>{account.first_name}</TableCell>
                   <TableCell>{account.last_name}</TableCell>
-                  <TableCell>
-                    {account.date_created
-                      ? new Date(account.date_created).toLocaleDateString()
-                      : "—"}
-                  </TableCell>
                   <TableCell align="center">
                     <Tooltip title="View">
                       <IconButton

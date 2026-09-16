@@ -30,6 +30,7 @@ const Transition = React.forwardRef(function Transition(props, ref) {
 const emptyForm = {
   first_name: "",
   last_name: "",
+  position: "",
   password: "",
   confirmPassword: "",
   role: "officer",
@@ -46,10 +47,30 @@ const toBoolean = (value) =>
 
 // Preset permissions per role
 const ROLE_PERMISSIONS = {
-  officer:   { can_add: true,  can_edit: true,  can_delete: true,  can_moderate: false },
-  moderator: { can_add: true,  can_edit: true,  can_delete: false, can_moderate: true  },
-  viewer:    { can_add: false, can_edit: false,  can_delete: false, can_moderate: false },
-  customize: { can_add: false, can_edit: false,  can_delete: false, can_moderate: false },
+  officer: {
+    can_add: true,
+    can_edit: true,
+    can_delete: true,
+    can_moderate: false,
+  },
+  moderator: {
+    can_add: true,
+    can_edit: true,
+    can_delete: false,
+    can_moderate: true,
+  },
+  viewer: {
+    can_add: false,
+    can_edit: false,
+    can_delete: false,
+    can_moderate: false,
+  },
+  customize: {
+    can_add: false,
+    can_edit: false,
+    can_delete: false,
+    can_moderate: false,
+  },
 };
 
 function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
@@ -67,6 +88,7 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
       student_number: selectedAccount?.student_number || "",
       first_name: selectedAccount?.first_name || "",
       last_name: selectedAccount?.last_name || "",
+      position: selectedAccount?.position || "",
       password: "",
       confirmPassword: "",
       role: selectedAccount?.role || "officer",
@@ -108,6 +130,10 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
       setError("First name and last name are required.");
       return;
     }
+    if (!formData.position.trim()) {
+      setError("Position is required.");
+      return;
+    }
     if (!isEdit && !formData.password.trim()) {
       setError("Password is required when creating an account.");
       return;
@@ -127,6 +153,7 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
     try {
       const payload = {
         student_number: formData.student_number.trim(),
+        position: formData.position.trim(),
         first_name: formData.first_name.trim(),
         last_name: formData.last_name.trim(),
         role: formData.role,
@@ -166,7 +193,13 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
           {error && <Alert severity="error">{error}</Alert>}
 
           {/* Name row */}
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+              gap: 2,
+            }}
+          >
             <TextField
               label="First Name"
               name="first_name"
@@ -186,22 +219,27 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
               size="small"
             />
           </Box>
-          
+
           {/* Student Number */}
           <TextField
-              label="Student Number"
-              name="student_number"
-              value={formData.student_number}
-              onChange={handleChange}
-              disabled={loading}
-              required
-              size="small"
-            />
+            label="Student Number"
+            name="student_number"
+            value={formData.student_number}
+            onChange={handleChange}
+            disabled={loading}
+            required
+            size="small"
+          />
 
           {/* Role */}
           <FormControl fullWidth size="small" disabled={loading}>
             <InputLabel>Role</InputLabel>
-            <Select name="role" value={formData.role} label="Role" onChange={handleChange}>
+            <Select
+              name="role"
+              value={formData.role}
+              label="Role"
+              onChange={handleChange}
+            >
               <MenuItem value="mayor">Mayor</MenuItem>
               <MenuItem value="vice-mayor">Vice Mayor</MenuItem>
               <MenuItem value="secretary">Secretary</MenuItem>
@@ -277,7 +315,9 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
 
           {/* Password */}
           <TextField
-            label={isEdit ? "New Password (leave blank to keep current)" : "Password"}
+            label={
+              isEdit ? "New Password (leave blank to keep current)" : "Password"
+            }
             name="password"
             type={showPassword ? "text" : "password"}
             value={formData.password}
@@ -285,12 +325,24 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
             disabled={loading}
             required={!isEdit}
             size="small"
-            helperText={isEdit ? "Optional — leave blank to keep current password." : "Minimum 6 characters."}
+            helperText={
+              isEdit
+                ? "Optional — leave blank to keep current password."
+                : "Minimum 6 characters."
+            }
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
-                  <IconButton onClick={() => setShowPassword((p) => !p)} edge="end" size="small">
-                    {showPassword ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                  <IconButton
+                    onClick={() => setShowPassword((p) => !p)}
+                    edge="end"
+                    size="small"
+                  >
+                    {showPassword ? (
+                      <VisibilityOffIcon fontSize="small" />
+                    ) : (
+                      <VisibilityIcon fontSize="small" />
+                    )}
                   </IconButton>
                 </InputAdornment>
               ),
@@ -308,8 +360,16 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
-                  <IconButton onClick={() => setShowConfirm((p) => !p)} edge="end" size="small">
-                    {showConfirm ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                  <IconButton
+                    onClick={() => setShowConfirm((p) => !p)}
+                    edge="end"
+                    size="small"
+                  >
+                    {showConfirm ? (
+                      <VisibilityOffIcon fontSize="small" />
+                    ) : (
+                      <VisibilityIcon fontSize="small" />
+                    )}
                   </IconButton>
                 </InputAdornment>
               ),
@@ -322,7 +382,12 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
         <Button onClick={handleClose} color="inherit" disabled={loading}>
           Cancel
         </Button>
-        <Button onClick={handleSubmit} variant="contained" color="error" disabled={loading}>
+        <Button
+          onClick={handleSubmit}
+          variant="contained"
+          color="error"
+          disabled={loading}
+        >
           {isEdit ? "Update Account" : "Create Account"}
         </Button>
       </DialogActions>

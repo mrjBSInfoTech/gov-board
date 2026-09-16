@@ -19,9 +19,25 @@ const handleError = (error) => {
 };
 
 // REGISTER
-export const registerUser = async ({ first_name, last_name, student_number, password }) => {
+export const registerUser = async ({
+  first_name,
+  last_name,
+  student_number,
+  position,
+  year,
+  section,
+  password,
+}) => {
   try {
-    const res = await api.post("/register", { first_name, last_name, student_number, password });
+    const res = await api.post("/register", {
+      first_name,
+      last_name,
+      student_number,
+      position,
+      year,
+      section,
+      password,
+    });
     console.log("Register API response:", res.data);
     return res.data;
   } catch (error) {

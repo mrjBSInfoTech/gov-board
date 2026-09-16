@@ -36,8 +36,7 @@ function SlideTransition(props) {
 }
 
 const Login = () => {
-  const [first_name, setFirstName] = useState("");
-  const [last_name, setLastName] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [module, setModule] = useState("Admin");
   const [showPassword, setShowPassword] = useState(false);
@@ -68,7 +67,7 @@ const Login = () => {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [first_name, password]);
+  }, [username, password]);
 
   const showSnackbar = (message, severity = "success") => {
     setSnackbarMessage(message);
@@ -93,13 +92,13 @@ const Login = () => {
   };
 
   const handleLogin = async () => {
-    if (!first_name || !password) {
+    if (!username || !password) {
       showSnackbar("Please fill in all fields", "error");
       return;
     }
 
     try {
-      const data = await loginUser({ first_name : first_name, password: password });
+      const data = await loginUser({ username, password });
 
       clearAuthData("admin");
       setToken("admin", data.token);
@@ -226,15 +225,9 @@ const Login = () => {
                 },
               }}
             >
-              <MenuItem value="Admin">
-                Admin
-              </MenuItem>
-              <MenuItem value="Officer">
-                Officer
-              </MenuItem>
-              <MenuItem value="Student">
-                Student
-              </MenuItem>
+              <MenuItem value="Admin">Admin</MenuItem>
+              <MenuItem value="Officer">Officer</MenuItem>
+              <MenuItem value="Student">Student</MenuItem>
             </Select>
           </Box>
 
@@ -255,8 +248,8 @@ const Login = () => {
               fullWidth
               variant="outlined"
               placeholder="Enter your username"
-              value={first_name}
-              onChange={(e) => setFirstName(e.target.value)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               size="small"
               InputProps={{
                 startAdornment: (

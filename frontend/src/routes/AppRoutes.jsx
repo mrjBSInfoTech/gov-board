@@ -15,7 +15,9 @@ import StudentRoute from "../middleware/StudentRoute";
 // Admin Pages
 import AdminDashboard from "../pages/admin/Dashboard";
 import AdminAccount from "../pages/admin/Account";
+import AdminStudents from "../pages/admin/Students";
 import AdminRoom from "../pages/admin/Room";
+import AdminAudit from "../pages/admin/Audit";
 import AdminLogin from "../pages/admin/Login";
 
 // Student Pages
@@ -60,8 +62,14 @@ export default function AppRoutes() {
               <Route element={<AdminLayout />}>
                 <Route index element={<Navigate to="dashboard" replace />} />
                 <Route path="dashboard" element={<AdminDashboard />} />
-                <Route path="account" element={<AdminAccount />} />
+                <Route
+                  path="account"
+                  element={<Navigate to="officials" replace />}
+                />
+                <Route path="account/officials" element={<AdminAccount />} />
+                <Route path="account/students" element={<AdminStudents />} />
                 <Route path="room" element={<AdminRoom />} />
+                <Route path="audit" element={<AdminAudit />} />
               </Route>
             </Route>
           </Route>
@@ -74,13 +82,12 @@ export default function AppRoutes() {
               <Route element={<OfficerLayout />}>
                 <Route index element={<Navigate to="dashboard" replace />} />
                 <Route path="dashboard" element={<OfficerDashboard />} />
-                <Route path="account" element={<OfficerAccount />} />  
-                <Route path="announcement" element={<OfficerAnnouncement />} />  
+                <Route path="account" element={<OfficerAccount />} />
+                <Route path="announcement" element={<OfficerAnnouncement />} />
                 <Route path="moderate" element={<OfficerModerate />} />
-              </Route>  
+              </Route>
             </Route>
           </Route>
-
         </Routes>
       </ThemeProvider>
     </HelmetProvider>

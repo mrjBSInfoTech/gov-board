@@ -36,10 +36,10 @@ const handleError = (error) => {
 };
 
 // LOGIN
-export const loginUser = async ({ first_name, password }) => {
+export const loginUser = async ({ username, password }) => {
   try {
     const res = await api.post("/login", {
-      first_name,
+      username,
       password,
     });
     console.log("Login API response:", res.data);
@@ -56,7 +56,7 @@ export const logout = () => {
   localStorage.removeItem("admin_id");
   localStorage.removeItem("first_name");
   localStorage.removeItem("last_name");
-}
+};
 
 // CHECK IF USER IS AUTHENTICATED
 export const isAuthenticated = () => {
@@ -67,4 +67,3 @@ export const isAuthenticated = () => {
 export const getToken = () => {
   return localStorage.getItem("admin_token");
 };
-

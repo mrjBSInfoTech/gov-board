@@ -49,6 +49,9 @@ export default function Register() {
     first_name: "",
     last_name: "",
     student_number: "",
+    position: "",
+    year: "",
+    section: "",
     password: "",
     confirmPassword: "",
   });
@@ -94,6 +97,9 @@ export default function Register() {
       !form.first_name ||
       !form.last_name ||
       !form.student_number ||
+      !form.position ||
+      !form.year ||
+      !form.section ||
       !form.password ||
       !form.confirmPassword
     ) {
@@ -117,10 +123,16 @@ export default function Register() {
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
         student_number: form.student_number.trim(),
+        position: form.position.trim(),
+        year: form.year.trim(),
+        section: form.section.trim(),
         password: form.password,
       });
 
-      showSnackbar("Account created successfully! Redirecting to login...", "success");
+      showSnackbar(
+        "Account created successfully! Redirecting to login...",
+        "success",
+      );
       setTimeout(() => navigate("/student/login", { replace: true }), 1500);
     } catch (error) {
       showSnackbar(error.message || "Registration failed.", "error");
@@ -315,6 +327,32 @@ export default function Register() {
               />
             </Box>
 
+            {/* Academic details */}
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <TextField
+                fullWidth
+                label="Year"
+                placeholder="e.g. 1"
+                name="year"
+                value={form.year}
+                onChange={handleChange}
+                size="small"
+                required
+                InputProps={{ sx: inputStyle }}
+              />
+              <TextField
+                fullWidth
+                label="Section"
+                placeholder="e.g. A"
+                name="section"
+                value={form.section}
+                onChange={handleChange}
+                size="small"
+                required
+                InputProps={{ sx: inputStyle }}
+              />
+            </Stack>
+
             {/* Password */}
             <Box>
               <Typography
@@ -403,7 +441,9 @@ export default function Register() {
                     <InputAdornment position="end">
                       <IconButton
                         size="small"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        onClick={() =>
+                          setShowConfirmPassword(!showConfirmPassword)
+                        }
                         edge="end"
                       >
                         {showConfirmPassword ? (

@@ -1,35 +1,33 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-// Make sure to point this to your actual Supabase configuration file
-import supabase from "../../config/supabase.js"; 
+import db from "../../database/db.js";
 
 const router = express.Router();
 
 // Login route
-router.post("/login", async (req, res) => {
-  const { first_name, password } = req.body;
+router.post("/login", (req, res) => {
+  const { username, password } = req.body;
 
-  if (!first_name || !password) {
+  if (!username || !password) {
     return res
       .status(400)
-      .json({ message: "First name and password are required" });
+      .json({ message: "Username and password are required" });
   }
 
-  try {
-    // Supabase query replacing the raw SQL
-    const { data: user, error } = await supabase
-      .from("admin")
-      .select("admin_id, password, first_name, last_name")
-      .eq("first_name", first_name)
-      .maybeSingle();
+  const sql = `
+    SELECT admin_id, username, password, first_name, last_name
+    FROM admin
+    WHERE username = ?
+    LIMIT 1`;
 
-    if (error) {
-      console.error("DB error:", error);
+  db.query(sql, [username.trim()], (err, results) => {
+    if (err) {
+      console.error("DB error:", err);
       return res.status(500).json({ message: "Database error" });
     }
 
-    // If no user is found, user will be null
+    const user = results[0];
     if (!user) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
@@ -46,6 +44,7 @@ router.post("/login", async (req, res) => {
         admin_id: user.admin_id,
         first_name: user.first_name,
         last_name: user.last_name,
+        username: user.username,
       },
       process.env.JWT_SECRET,
       { expiresIn: "10d" },
@@ -54,19 +53,18 @@ router.post("/login", async (req, res) => {
     res.json({
       token,
       admin_id: user.admin_id,
+      username: user.username,
       first_name: user.first_name,
       last_name: user.last_name,
     });
-  } catch (err) {
-    console.error("Server error:", err);
-    res.status(500).json({ message: "Internal server error" });
-  }
+  });
 });
 
 export default router;
 
 // Backup Code
-{/*
+{
+  /*
 import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -127,4 +125,5 @@ router.post("/login", async (req, res) => {
 });
 
 export default router;
-*/}
+*/
+}

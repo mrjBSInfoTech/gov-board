@@ -10,8 +10,10 @@ import multer from "multer";
 import adminAuthenticateRoutes from "./routes/admin/adminAuthentication.js";
 import adminAccountRoutes from "./routes/admin/adminAccount.js";
 import adminRoomRoutes from "./routes/admin/adminRoom.js";
+import adminStudentRoutes from "./routes/admin/adminStudent.js";
 // Routes (Officer)
 import officerAuthenticateRoutes from "./routes/officer/officerAuthentication.js";
+import officerDashboardRoutes from "./routes/officer/officerDashboard.js";
 // Routes (Student)
 import studentAuthenticateRoutes from "./routes/student/studentAuthenticate.js";
 
@@ -39,8 +41,10 @@ app.get("/", (req, res) => {
 app.use("/api/admin/authenticate", adminAuthenticateRoutes);
 app.use("/api/admin/accounts", adminAccountRoutes);
 app.use("/api/admin/rooms", adminRoomRoutes);
+app.use("/api/admin/students", adminStudentRoutes);
 // Routes (Officer)
 app.use("/api/officer/authenticate", officerAuthenticateRoutes);
+app.use("/api/officer/dashboard", officerDashboardRoutes);
 // Routes (Student)
 app.use("/api/student/authenticate", studentAuthenticateRoutes);
 

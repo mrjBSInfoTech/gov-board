@@ -117,13 +117,17 @@ const Login = () => {
 
       localStorage.setItem("officer_officer_id", data.officer_id || "");
       localStorage.setItem("officer_student_number", data.student_number || "");
+      localStorage.setItem("officer_position", data.position || "Officer");
       localStorage.setItem("officer_first_name", data.first_name || "");
       localStorage.setItem("officer_last_name", data.last_name || "");
       localStorage.setItem("officer_role", data.role || "");
       localStorage.setItem("officer_can_add", data.can_add ? "1" : "0");
       localStorage.setItem("officer_can_edit", data.can_edit ? "1" : "0");
       localStorage.setItem("officer_can_delete", data.can_delete ? "1" : "0");
-      localStorage.setItem("officer_can_moderate", data.can_moderate ? "1" : "0");
+      localStorage.setItem(
+        "officer_can_moderate",
+        data.can_moderate ? "1" : "0",
+      );
 
       showSnackbar("Login successful!", "success");
       setTimeout(() => navigate("/officer/dashboard", { replace: true }), 1000);
@@ -131,7 +135,6 @@ const Login = () => {
       showSnackbar(`Login failed: ${error.message}`, "error");
     }
   };
-
 
   return (
     <Container
@@ -162,7 +165,7 @@ const Login = () => {
           position: "relative",
           overflow: "hidden",
         }}
-      > 
+      >
         <Box
           sx={{
             display: "flex",

@@ -1,6 +1,6 @@
 import express from "express";
 import bcrypt from "bcryptjs";
-import supabase from "../../config/supabase.js";
+import db from "../../database/db.js";
 import { authenticateAdmin } from "../../middleware/adminAuthMiddleware.js";
 
 const router = express.Router();
@@ -34,68 +34,31 @@ const rolePermissions = (role, values = {}) => {
 };
 
 // ─── GET all officer accounts (with roles) ──────────────────────────────────
-router.get("/", authenticateAdmin, async (req, res) => {
-  try {
-    // Supabase auto-joins using foreign keys when you query related tables
-    const { data: result, error } = await supabase
-      .from("officer")
-      .select(`
-        officer_id,
-        admin_id,
-        student_number,
-        first_name,
-        last_name,
-        date_created,
-        officer_role (
-          officer_role_id,
-          role,
-          can_add,
-          can_edit,
-          can_delete,
-          can_moderate
-        )
-      `)
-      .order("date_created", { ascending: false });
+router.get("/", authenticateAdmin, (req, res) => {
+  const sql = `
+    SELECT o.officer_id, o.admin_id, o.student_number, o.position, o.year, o.section, o.first_name,
+      o.last_name, o.date_created, r.officer_role_id, r.role,
+      r.can_add, r.can_edit, r.can_delete, r.can_moderate
+    FROM officer o
+    LEFT JOIN officer_role r ON o.officer_id = r.officer_id
+    ORDER BY o.date_created DESC`;
 
-    if (error) {
-      console.error("DB error:", error);
+  db.query(sql, (err, result) => {
+    if (err) {
+      console.error("DB error:", err);
       return res.status(500).json({ message: "Database error" });
     }
-
-    // Flatten the Supabase nested object response to match your old MySQL structure
-    const flattenedResult = result.map((officer) => {
-      // Handle cases where an officer might not have a role row yet
-      const roleData = officer.officer_role && officer.officer_role.length > 0 
-          ? officer.officer_role[0] 
-          : (officer.officer_role || {});
-          
-      return {
-        officer_id: officer.officer_id,
-        admin_id: officer.admin_id,
-        student_number: officer.student_number,
-        first_name: officer.first_name,
-        last_name: officer.last_name,
-        date_created: officer.date_created,
-        officer_role_id: roleData.officer_role_id || null,
-        role: roleData.role || null,
-        can_add: roleData.can_add || 0,
-        can_edit: roleData.can_edit || 0,
-        can_delete: roleData.can_delete || 0,
-        can_moderate: roleData.can_moderate || 0,
-      };
-    });
-
-    res.json(flattenedResult);
-  } catch (err) {
-    console.error("Server error:", err);
-    res.status(500).json({ message: "Internal server error" });
-  }
+    res.json(result);
+  });
 });
 
 // ─── POST create new officer account ─────────────────────────────────
 router.post("/", authenticateAdmin, async (req, res) => {
   const {
     student_number,
+    position,
+    year,
+    section,
     first_name,
     last_name,
     password,
@@ -106,53 +69,65 @@ router.post("/", authenticateAdmin, async (req, res) => {
     can_moderate,
   } = req.body;
 
-  if (!first_name || !last_name || !password || !student_number) {
-    return res.status(400).json({ message: "Please fill all the required fields" });
+  if (
+    !first_name ||
+    !last_name ||
+    !password ||
+    !student_number ||
+    !position ||
+    !year ||
+    !section
+  ) {
+    return res
+      .status(400)
+      .json({ message: "Please fill all the required fields" });
   }
 
-  const permissions = rolePermissions(role, { can_add, can_edit, can_delete, can_moderate });
+  const permissions = rolePermissions(role, {
+    can_add,
+    can_edit,
+    can_delete,
+    can_moderate,
+  });
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     const adminId = req.user.admin_id;
 
-    // Step 1: Insert officer
-    const { data: newOfficer, error: officerError } = await supabase
-      .from("officer")
-      .insert([{
-        admin_id: adminId,
-        student_number: student_number.trim(),
-        first_name: first_name.trim(),
-        last_name: last_name.trim(),
-        password: hashedPassword
-      }])
-      .select()
-      .single();
+    const connection = db.promise();
+    await connection.beginTransaction();
+    try {
+      const [officerResult] = await connection.query(
+        `INSERT INTO officer (admin_id, student_number, position, year, section, first_name, last_name, password, date_created)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [
+          adminId,
+          student_number.trim(),
+          position.trim(),
+          year.trim(),
+          section.trim(),
+          first_name.trim(),
+          last_name.trim(),
+          hashedPassword,
+        ],
+      );
 
-    if (officerError) {
-      console.error("DB error (officer):", officerError);
-      return res.status(500).json({ message: "Database error" });
-    }
-
-    const officerId = newOfficer.officer_id;
-
-    // Step 2: Insert officer_role
-    const { error: roleError } = await supabase
-      .from("officer_role")
-      .insert([{
-        officer_id: officerId,
-        role: role,
-        can_add: permissions.can_add,
-        can_edit: permissions.can_edit,
-        can_delete: permissions.can_delete,
-        can_moderate: permissions.can_moderate
-      }]);
-
-    if (roleError) {
-      // Manual Rollback: Delete the newly created officer if role fails
-      await supabase.from("officer").delete().eq("officer_id", officerId);
-      console.error("DB error (role):", roleError);
-      return res.status(500).json({ message: "Database error during role assignment" });
+      await connection.query(
+        `INSERT INTO officer_role (officer_id, role, can_add, can_edit, can_delete, can_moderate)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          officerResult.insertId,
+          role || "officer",
+          permissions.can_add,
+          permissions.can_edit,
+          permissions.can_delete,
+          permissions.can_moderate,
+        ],
+      );
+      await connection.commit();
+    } catch (transactionError) {
+      await connection.rollback();
+      throw transactionError;
     }
 
     res.status(201).json({ message: "Officer account created successfully" });
@@ -167,6 +142,9 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
   const { id } = req.params;
   const {
     student_number,
+    position,
+    year,
+    section,
     first_name,
     last_name,
     password,
@@ -177,55 +155,78 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
     can_moderate,
   } = req.body;
 
-  if (!first_name || !last_name) {
-    return res.status(400).json({ message: "Please fill all the required fields" });
+  if (
+    !first_name ||
+    !last_name ||
+    !student_number ||
+    !position ||
+    !year ||
+    !section
+  ) {
+    return res
+      .status(400)
+      .json({ message: "Please fill all the required fields" });
   }
 
   try {
-    // Prepare update object
-    const updateData = {
-      student_number: student_number.trim(),
-      first_name: first_name.trim(),
-      last_name: last_name.trim()
-    };
-    
-    if (password) {
-      updateData.password = await bcrypt.hash(password, 10);
-    }
+    const connection = db.promise();
+    await connection.beginTransaction();
+    try {
+      const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
+      const updateSql = password
+        ? `UPDATE officer SET student_number = ?, position = ?, year = ?, section = ?, first_name = ?, last_name = ?, password = ? WHERE officer_id = ?`
+        : `UPDATE officer SET student_number = ?, position = ?, year = ?, section = ?, first_name = ?, last_name = ? WHERE officer_id = ?`;
+      const updateParams = password
+        ? [
+            student_number.trim(),
+            position.trim(),
+            year.trim(),
+            section.trim(),
+            first_name.trim(),
+            last_name.trim(),
+            hashedPassword,
+            id,
+          ]
+        : [
+            student_number.trim(),
+            position.trim(),
+            year.trim(),
+            section.trim(),
+            first_name.trim(),
+            last_name.trim(),
+            id,
+          ];
+      const [officerResult] = await connection.query(updateSql, updateParams);
 
-    // Update officer
-    const { data: updatedOfficer, error: officerError } = await supabase
-      .from("officer")
-      .update(updateData)
-      .eq("officer_id", id)
-      .select();
+      if (officerResult.affectedRows === 0) {
+        await connection.rollback();
+        return res.status(404).json({ message: "Officer not found" });
+      }
 
-    if (officerError) {
-      console.error("DB error:", officerError);
-      return res.status(500).json({ message: "Database error" });
-    }
-
-    if (!updatedOfficer || updatedOfficer.length === 0) {
-      return res.status(404).json({ message: "Officer not found" });
-    }
-
-    // Upsert officer_role
-    const permissions = rolePermissions(role || "officer", { can_add, can_edit, can_delete, can_moderate });
-    
-    const { error: roleError } = await supabase
-      .from("officer_role")
-      .upsert({
-        officer_id: id,
-        role: role || "officer",
-        can_add: permissions.can_add,
-        can_edit: permissions.can_edit,
-        can_delete: permissions.can_delete,
-        can_moderate: permissions.can_moderate
-      }, { onConflict: 'officer_id' }); // Relies on officer_id being UNIQUE in officer_role table
-
-    if (roleError) {
-      console.error("DB error:", roleError);
-      return res.status(500).json({ message: "Database error while updating roles" });
+      const permissions = rolePermissions(role || "officer", {
+        can_add,
+        can_edit,
+        can_delete,
+        can_moderate,
+      });
+      await connection.query(
+        `INSERT INTO officer_role (officer_id, role, can_add, can_edit, can_delete, can_moderate)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE role = VALUES(role), can_add = VALUES(can_add),
+         can_edit = VALUES(can_edit), can_delete = VALUES(can_delete), can_moderate = VALUES(can_moderate)`,
+        [
+          id,
+          role || "officer",
+          permissions.can_add,
+          permissions.can_edit,
+          permissions.can_delete,
+          permissions.can_moderate,
+        ],
+      );
+      await connection.commit();
+    } catch (transactionError) {
+      await connection.rollback();
+      throw transactionError;
     }
 
     res.json({ message: "Officer account updated" });
@@ -240,31 +241,23 @@ router.delete("/:id", authenticateAdmin, async (req, res) => {
   const { id } = req.params;
 
   try {
-    // Delete role first to mimic the original manual cascading logic
-    const { error: roleError } = await supabase
-      .from("officer_role")
-      .delete()
-      .eq("officer_id", id);
-
-    if (roleError) {
-      console.error("DB error:", roleError);
-      return res.status(500).json({ message: "Database error deleting roles" });
-    }
-
-    // Delete officer
-    const { data, error: officerError } = await supabase
-      .from("officer")
-      .delete()
-      .eq("officer_id", id)
-      .select();
-
-    if (officerError) {
-      console.error("DB error:", officerError);
-      return res.status(500).json({ message: "Database error deleting officer" });
-    }
-
-    if (!data || data.length === 0) {
-      return res.status(404).json({ message: "Officer not found" });
+    const connection = db.promise();
+    await connection.beginTransaction();
+    try {
+      await connection.query("DELETE FROM officer_role WHERE officer_id = ?", [
+        id,
+      ]);
+      const [officerResult] = await connection.query(
+        "DELETE FROM officer WHERE officer_id = ?",
+        [id],
+      );
+      await connection.commit();
+      if (officerResult.affectedRows === 0) {
+        return res.status(404).json({ message: "Officer not found" });
+      }
+    } catch (transactionError) {
+      await connection.rollback();
+      throw transactionError;
     }
 
     res.json({ message: "Officer account deleted successfully" });
@@ -276,9 +269,9 @@ router.delete("/:id", authenticateAdmin, async (req, res) => {
 
 export default router;
 
-
 // Backup Code
-{/*
+{
+  /*
 import express from "express";
 import bcrypt from "bcryptjs";
 import db from "../../database/db.js";
@@ -525,4 +518,5 @@ router.delete("/:id", authenticateAdmin, (req, res) => {
 });
 
 export default router;
-*/}
+*/
+}

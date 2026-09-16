@@ -9,6 +9,7 @@ export const authenticateOfficer = (req, res, next) => {
       .status(401)
       .json({ message: "Access denied. No token provided." });
   }
+
   if (!token) {
     return res.status(401).json({ message: "Invalid token format." });
   }
@@ -21,12 +22,12 @@ export const authenticateOfficer = (req, res, next) => {
         return res.status(403).json({ message: "Invalid or expired token." });
       }
 
-      const adminId = user.admin_id || user.id;
-      if (!adminId) {
-        return res.status(403).json({ message: "Unable to identify admin." });
+      const officerId = user.officer_id || user.id;
+      if (!officerId) {
+        return res.status(403).json({ message: "Unable to identify officer." });
       }
 
-      req.user = { ...user, admin_id: adminId };
+      req.user = { ...user, officer_id: officerId };
       next();
     },
   );
