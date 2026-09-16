@@ -14,6 +14,7 @@ import adminStudentRoutes from "./routes/admin/adminStudent.js";
 // Routes (Officer)
 import officerAuthenticateRoutes from "./routes/officer/officerAuthentication.js";
 import officerDashboardRoutes from "./routes/officer/officerDashboard.js";
+import officerAnnouncementRoutes from "./routes/officer/officerAnnouncement.js";
 // Routes (Student)
 import studentAuthenticateRoutes from "./routes/student/studentAuthenticate.js";
 
@@ -45,6 +46,7 @@ app.use("/api/admin/students", adminStudentRoutes);
 // Routes (Officer)
 app.use("/api/officer/authenticate", officerAuthenticateRoutes);
 app.use("/api/officer/dashboard", officerDashboardRoutes);
+app.use("/api/officer/announcements", officerAnnouncementRoutes);
 // Routes (Student)
 app.use("/api/student/authenticate", studentAuthenticateRoutes);
 

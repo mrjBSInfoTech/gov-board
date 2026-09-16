@@ -20,4 +20,22 @@ router.get("/", authenticateAdmin, (req, res) => {
   });
 });
 
+router.delete("/:id", authenticateAdmin, (req, res) => {
+  const student_id = req.params.id;
+  const sql = `DELETE FROM student WHERE student_id = ?`;
+
+  db.query(sql, [student_id], (err, result) => {
+    if (err) {
+      console.error("DB error:", err);
+      return res.status(500).json({ message: "Database error" });
+    }
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    res.json({ message: "Student deleted successfully" });
+  });
+});
+
 export default router;

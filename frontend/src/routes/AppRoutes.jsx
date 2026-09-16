@@ -17,6 +17,7 @@ import AdminDashboard from "../pages/admin/Dashboard";
 import AdminAccount from "../pages/admin/Account";
 import AdminStudents from "../pages/admin/Students";
 import AdminRoom from "../pages/admin/Room";
+import AdminRoomDetails from "../pages/admin/RoomDetails";
 import AdminAudit from "../pages/admin/Audit";
 import AdminLogin from "../pages/admin/Login";
 
@@ -69,6 +70,7 @@ export default function AppRoutes() {
                 <Route path="account/officials" element={<AdminAccount />} />
                 <Route path="account/students" element={<AdminStudents />} />
                 <Route path="room" element={<AdminRoom />} />
+                <Route path="room/:roomId" element={<AdminRoomDetails />} />
                 <Route path="audit" element={<AdminAudit />} />
               </Route>
             </Route>

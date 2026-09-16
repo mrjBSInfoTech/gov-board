@@ -1,3 +1,6 @@
+// Backup Code
+{
+  /*
 import express from "express";
 import bcrypt from "bcryptjs";
 import db from "../../database/db.js";
@@ -209,20 +212,35 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
         can_delete,
         can_moderate,
       });
-      await connection.query(
-        `INSERT INTO officer_role (officer_id, role, can_add, can_edit, can_delete, can_moderate)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE role = VALUES(role), can_add = VALUES(can_add),
-         can_edit = VALUES(can_edit), can_delete = VALUES(can_delete), can_moderate = VALUES(can_moderate)`,
-        [
-          id,
-          role || "officer",
-          permissions.can_add,
-          permissions.can_edit,
-          permissions.can_delete,
-          permissions.can_moderate,
-        ],
+      const roleValues = [
+        role || "officer",
+        permissions.can_add,
+        permissions.can_edit,
+        permissions.can_delete,
+        permissions.can_moderate,
+        id,
+      ];
+      const [roleResult] = await connection.query(
+        `UPDATE officer_role
+         SET role = ?, can_add = ?, can_edit = ?, can_delete = ?, can_moderate = ?
+         WHERE officer_id = ?`,
+        roleValues,
       );
+
+      if (roleResult.affectedRows === 0) {
+        await connection.query(
+          `INSERT INTO officer_role (officer_id, role, can_add, can_edit, can_delete, can_moderate)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [
+            id,
+            role || "officer",
+            permissions.can_add,
+            permissions.can_edit,
+            permissions.can_delete,
+            permissions.can_moderate,
+          ],
+        );
+      }
       await connection.commit();
     } catch (transactionError) {
       await connection.rollback();
@@ -268,10 +286,8 @@ router.delete("/:id", authenticateAdmin, async (req, res) => {
 });
 
 export default router;
+*/}
 
-// Backup Code
-{
-  /*
 import express from "express";
 import bcrypt from "bcryptjs";
 import db from "../../database/db.js";
@@ -314,6 +330,9 @@ router.get("/", authenticateAdmin, (req, res) => {
       o.officer_id,
       o.admin_id,
       o.student_number,
+      o.position,
+      o.year,
+      o.section,
       o.first_name,
       o.last_name,
       o.date_created,
@@ -340,6 +359,9 @@ router.get("/", authenticateAdmin, (req, res) => {
 router.post("/", authenticateAdmin, async (req, res) => {
   const {
     student_number,
+    position,
+    year,
+    section,
     first_name,
     last_name,
     password,
@@ -350,7 +372,15 @@ router.post("/", authenticateAdmin, async (req, res) => {
     can_moderate,
   } = req.body;
 
-  if (!first_name || !last_name || !password || !student_number) {
+  if (
+    !first_name ||
+    !last_name ||
+    !password ||
+    !student_number ||
+    !position ||
+    !year ||
+    !section
+  ) {
     return res.status(400).json({ message: "Please fill all the required fields" });
   }
 
@@ -365,10 +395,13 @@ router.post("/", authenticateAdmin, async (req, res) => {
 
       // Insert officer
       const sqlOfficer = `
-        INSERT INTO officer (admin_id, student_number, first_name, last_name, password, date_created)
-        VALUES (?, ?, ?, ?, ?, NOW())`;
+        INSERT INTO officer (admin_id, student_number, position, year, section, first_name, last_name, password, date_created)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`;
 
-      db.query(sqlOfficer, [adminId, student_number.trim(), first_name.trim(), last_name.trim(), hashedPassword], (err, result) => {
+      db.query(
+        sqlOfficer,
+        [adminId, student_number.trim(), position.trim(), year, section.trim(), first_name.trim(), last_name.trim(), hashedPassword],
+        (err, result) => {
         if (err) {
           return db.rollback(() => {
             console.error("DB error:", err);
@@ -385,7 +418,7 @@ router.post("/", authenticateAdmin, async (req, res) => {
 
         db.query(
           sqlRole,
-          [officerId, role, permissions.can_add, permissions.can_edit, permissions.can_delete, permissions.can_moderate],
+          [officerId, role || "officer", permissions.can_add, permissions.can_edit, permissions.can_delete, permissions.can_moderate],
           (err) => {
             if (err) {
               return db.rollback(() => {
@@ -402,7 +435,8 @@ router.post("/", authenticateAdmin, async (req, res) => {
             });
           }
         );
-      });
+        },
+      );
     });
   } catch (err) {
     console.error("Error:", err);
@@ -415,6 +449,9 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
   const { id } = req.params;
   const {
     student_number,
+    position,
+    year,
+    section,
     first_name,
     last_name,
     password,
@@ -425,7 +462,7 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
     can_moderate,
   } = req.body;
 
-  if (!first_name || !last_name) {
+  if (!first_name || !last_name || !student_number || !position || !year || !section) {
     return res.status(400).json({ message: "Please fill all the required fields" });
   }
 
@@ -437,11 +474,11 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
       let sqlOfficer, officerParams;
       if (password) {
         const hashedPassword = await bcrypt.hash(password, 10);
-        sqlOfficer = `UPDATE officer SET student_number = ?, first_name = ?, last_name = ?, password = ? WHERE officer_id = ?`;
-        officerParams = [student_number.trim(), first_name.trim(), last_name.trim(), hashedPassword, id];
+        sqlOfficer = `UPDATE officer SET student_number = ?, position = ?, year = ?, section = ?, first_name = ?, last_name = ?, password = ? WHERE officer_id = ?`;
+        officerParams = [student_number.trim(), position.trim(), year, section.trim(), first_name.trim(), last_name.trim(), hashedPassword, id];
       } else {
-        sqlOfficer = `UPDATE officer SET student_number = ?, first_name = ?, last_name = ? WHERE officer_id = ?`;
-        officerParams = [student_number.trim(), first_name.trim(), last_name.trim(), id];
+        sqlOfficer = `UPDATE officer SET student_number = ?, position = ?, year = ?, section = ?, first_name = ?, last_name = ? WHERE officer_id = ?`;
+        officerParams = [student_number.trim(), position.trim(), year, section.trim(), first_name.trim(), last_name.trim(), id];
       }
 
       db.query(sqlOfficer, officerParams, (err, result) => {
@@ -455,23 +492,21 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
           return db.rollback(() => res.status(404).json({ message: "Officer not found" }));
         }
 
-        // Update officer_role (upsert)
+        // Update the existing role row instead of creating duplicates.
         const permissions = rolePermissions(role || "officer", { can_add, can_edit, can_delete, can_moderate });
-
-        const sqlRole = `
-          INSERT INTO officer_role (officer_id, role, can_add, can_edit, can_delete, can_moderate)
-          VALUES (?, ?, ?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE
-            role = VALUES(role),
-            can_add = VALUES(can_add),
-            can_edit = VALUES(can_edit),
-            can_delete = VALUES(can_delete),
-            can_moderate = VALUES(can_moderate)`;
+        const roleParams = [
+          role || "officer",
+          permissions.can_add,
+          permissions.can_edit,
+          permissions.can_delete,
+          permissions.can_moderate,
+          id,
+        ];
 
         db.query(
-          sqlRole,
-          [id, role || "officer", permissions.can_add, permissions.can_edit, permissions.can_delete, permissions.can_moderate],
-          (err) => {
+          "SELECT officer_role_id FROM officer_role WHERE officer_id = ? LIMIT 1",
+          [id],
+          (err, roleRows) => {
             if (err) {
               return db.rollback(() => {
                 console.error("DB error:", err);
@@ -479,11 +514,31 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
               });
             }
 
-            db.commit((err) => {
-              if (err) return db.rollback(() => res.status(500).json({ message: "Commit error" }));
-              res.json({ message: "Officer account updated" });
+            const sqlRole = roleRows.length
+              ? `UPDATE officer_role
+                 SET role = ?, can_add = ?, can_edit = ?, can_delete = ?, can_moderate = ?
+                 WHERE officer_id = ?`
+              : `INSERT INTO officer_role
+                 (officer_id, role, can_add, can_edit, can_delete, can_moderate)
+                 VALUES (?, ?, ?, ?, ?, ?)`;
+            const sqlParams = roleRows.length
+              ? roleParams
+              : [id, ...roleParams.slice(0, -1)];
+
+            db.query(sqlRole, sqlParams, (err) => {
+              if (err) {
+                return db.rollback(() => {
+                  console.error("DB error:", err);
+                  res.status(500).json({ message: "Database error" });
+                });
+              }
+
+              db.commit((err) => {
+                if (err) return db.rollback(() => res.status(500).json({ message: "Commit error" }));
+                res.json({ message: "Officer account updated" });
+              });
             });
-          }
+          },
         );
       });
     });
@@ -518,5 +573,3 @@ router.delete("/:id", authenticateAdmin, (req, res) => {
 });
 
 export default router;
-*/
-}

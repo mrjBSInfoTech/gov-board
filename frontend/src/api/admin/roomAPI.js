@@ -42,6 +42,16 @@ export const fetchRooms = async () => {
   }
 };
 
+// GET one room
+export const fetchRoom = async (id) => {
+  try {
+    const res = await api.get(`/rooms/${id}`);
+    return res.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+
 // POST create new room
 export const addRoom = async (formData) => {
   try {

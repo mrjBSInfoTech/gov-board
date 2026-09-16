@@ -12,12 +12,24 @@ import {
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import { useNavigate } from "react-router-dom";
 
 function RoomCard({ room, index, onEdit, onDelete, onCopy, copied }) {
+  const navigate = useNavigate();
+
   return (
     <Card
       variant="outlined"
-      sx={{ borderRadius: 2, height: "100%", display: "flex", flexDirection: "column" }}
+      onClick={() => navigate(`/admin/room/${room.room_id}`)}
+      sx={{
+        borderRadius: 2,
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        cursor: "pointer",
+        transition: "box-shadow 0.2s, transform 0.2s",
+        "&:hover": { boxShadow: 4, transform: "translateY(-2px)" },
+      }}
     >
       <CardContent sx={{ flexGrow: 1, pb: 1 }}>
         {/* Room Name */}
@@ -41,7 +53,10 @@ function RoomCard({ room, index, onEdit, onDelete, onCopy, copied }) {
           <Tooltip title={copied === room.room_id ? "Copied!" : "Copy"}>
             <IconButton
               size="small"
-              onClick={() => onCopy(room.room_number, room.room_id)}
+              onClick={(event) => {
+                event.stopPropagation();
+                onCopy(room.room_number, room.room_id);
+              }}
               sx={{ p: 0.3 }}
             >
               <ContentCopyIcon sx={{ fontSize: 13 }} color={copied === room.room_id ? "success" : "inherit"} />
@@ -65,12 +80,26 @@ function RoomCard({ room, index, onEdit, onDelete, onCopy, copied }) {
 
       <CardActions sx={{ justifyContent: "flex-end", py: 0.5, px: 1 }}>
         <Tooltip title="Edit">
-          <IconButton size="small" color="primary" onClick={() => onEdit(room)}>
+          <IconButton
+            size="small"
+            color="primary"
+            onClick={(event) => {
+              event.stopPropagation();
+              onEdit(room);
+            }}
+          >
             <EditIcon fontSize="small" />
           </IconButton>
         </Tooltip>
         <Tooltip title="Delete">
-          <IconButton size="small" color="error" onClick={() => onDelete(room)}>
+          <IconButton
+            size="small"
+            color="error"
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete(room);
+            }}
+          >
             <DeleteIcon fontSize="small" />
           </IconButton>
         </Tooltip>

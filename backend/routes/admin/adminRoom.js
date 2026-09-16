@@ -41,6 +41,28 @@ router.get("/generate-code", authenticateAdmin, (req, res) => {
   res.json({ code });
 });
 
+// GET one room
+router.get("/:id", authenticateAdmin, (req, res) => {
+  const sql = `
+    SELECT room_id, room_number, room_name, date_created
+    FROM room
+    WHERE room_id = ?
+    LIMIT 1`;
+
+  db.query(sql, [req.params.id], (err, result) => {
+    if (err) {
+      console.error("DB error:", err);
+      return res.status(500).json({ message: "Database error" });
+    }
+
+    if (result.length === 0) {
+      return res.status(404).json({ message: "Room not found" });
+    }
+
+    res.json(result[0]);
+  });
+});
+
 // POST create new room
 router.post("/", authenticateAdmin, (req, res) => {
   const { room_number, room_name } = req.body;

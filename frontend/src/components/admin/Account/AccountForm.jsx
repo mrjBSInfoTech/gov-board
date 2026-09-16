@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Checkbox,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -59,6 +61,8 @@ const toBoolean = (value) =>
   value === 1 ||
   ["1", "true"].includes(String(value).toLowerCase());
 
+const toText = (value) => (value == null ? "" : String(value));
+
 // Preset permissions per role
 const ROLE_PERMISSIONS = {
   officer: {
@@ -79,13 +83,18 @@ const ROLE_PERMISSIONS = {
     can_delete: false,
     can_moderate: false,
   },
-  customize: {
-    can_add: false,
-    can_edit: false,
-    can_delete: false,
-    can_moderate: false,
-  },
 };
+
+const POSITION_OPTIONS = [
+  "Mayor",
+  "Vice Mayor",
+  "Secretary",
+  "Treasurer",
+  "Auditor",
+  "Peace Officer",
+  "P.R.O.",
+  "Representative",
+];
 
 function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
   const isEdit = Boolean(selectedAccount);
@@ -97,22 +106,25 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
 
   useEffect(() => {
     if (!open) return;
-    setFormData({
-      ...emptyForm,
-      student_number: selectedAccount?.student_number || "",
-      position: selectedAccount?.position || "",
-      first_name: selectedAccount?.first_name || "",
-      last_name: selectedAccount?.last_name || "",
-      year: selectedAccount?.year || "",
-      section: selectedAccount?.section || "",
-      password: "",
-      confirmPassword: "",
-      role: selectedAccount?.role || "officer",
-      can_add: toBoolean(selectedAccount?.can_add ?? true),
-      can_edit: toBoolean(selectedAccount?.can_edit ?? true),
-      can_delete: toBoolean(selectedAccount?.can_delete ?? true),
-      can_moderate: toBoolean(selectedAccount?.can_moderate ?? false),
-    });
+    if (selectedAccount) {
+      setFormData({
+        student_number: toText(selectedAccount.student_number),
+        position: toText(selectedAccount.position),
+        first_name: toText(selectedAccount.first_name),
+        last_name: toText(selectedAccount.last_name),
+        year: toText(selectedAccount.year),
+        section: toText(selectedAccount.section),
+        password: "",
+        confirmPassword: "",
+        role: selectedAccount.role || "officer",
+        can_add: toBoolean(selectedAccount.can_add ?? true),
+        can_edit: toBoolean(selectedAccount.can_edit ?? true),
+        can_delete: toBoolean(selectedAccount.can_delete ?? true),
+        can_moderate: toBoolean(selectedAccount.can_moderate ?? false),
+      });
+    } else {
+      setFormData(emptyForm);
+    }
     setError("");
     setShowPassword(false);
     setShowConfirm(false);
@@ -121,11 +133,7 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
   const handleKeyDown = (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
-      handleVerify();
-    }
-
-    if (event.key === "Escape") {
-      handleClose();
+      handleSubmit();
     }
   };
 
@@ -134,47 +142,82 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
 
     // When role changes → apply preset permissions
     if (name === "role") {
-      const permissions = ROLE_PERMISSIONS[value] || ROLE_PERMISSIONS.customize;
-      setFormData((prev) => ({ ...prev, role: value, ...permissions }));
+      if (value === "customize") {
+        setFormData((prev) => ({ ...prev, role: "customize" }));
+      } else {
+        const permissions = ROLE_PERMISSIONS[value] || ROLE_PERMISSIONS.officer;
+        setFormData((prev) => ({ ...prev, role: value, ...permissions }));
+      }
+      setError("");
+      return;
+    }
+
+    if (type === "checkbox") {
+      setFormData((prev) => {
+        const updated = { ...prev, [name]: checked };
+        // Determine matching role based on updated permissions
+        let matchedRole = "customize";
+        for (const [roleKey, perms] of Object.entries(ROLE_PERMISSIONS)) {
+          if (
+            perms.can_add === updated.can_add &&
+            perms.can_edit === updated.can_edit &&
+            perms.can_delete === updated.can_delete &&
+            perms.can_moderate === updated.can_moderate
+          ) {
+            matchedRole = roleKey;
+            break;
+          }
+        }
+        updated.role = matchedRole;
+        return updated;
+      });
       setError("");
       return;
     }
 
     setFormData((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value,
+      [name]: value,
     }));
     setError("");
   };
 
   const handleSubmit = async () => {
-    // Validation
-    if (!formData.student_number.trim()) {
-      setError("Student Number is required.");
-      return;
-    }
-    if (!formData.first_name.trim() || !formData.last_name.trim()) {
+    const studentNumber = toText(formData.student_number).trim();
+    const firstName = toText(formData.first_name).trim();
+    const lastName = toText(formData.last_name).trim();
+    const position = toText(formData.position).trim();
+    const year = toText(formData.year).trim();
+    const section = toText(formData.section).trim();
+    const password = toText(formData.password).trim();
+    const confirmPassword = toText(formData.confirmPassword).trim();
+
+    if (!firstName || !lastName) {
       setError("First name and last name are required.");
       return;
     }
-    if (!formData.position.trim()) {
+    if (!studentNumber) {
+      setError("Student Number is required.");
+      return;
+    }
+    if (!position) {
       setError("Position is required.");
       return;
     }
-    if (!formData.year.trim() || !formData.section.trim()) {
+    if (!year || !section) {
       setError("Year and section are required.");
       return;
     }
-    if (!isEdit && !formData.password.trim()) {
+    if (!isEdit && !password) {
       setError("Password is required when creating an account.");
       return;
     }
-    if (formData.password || formData.confirmPassword) {
-      if (formData.password.length < 6) {
+    if (password || confirmPassword) {
+      if (password.length < 6) {
         setError("Password must be at least 6 characters.");
         return;
       }
-      if (formData.password !== formData.confirmPassword) {
+      if (password !== confirmPassword) {
         setError("Passwords do not match.");
         return;
       }
@@ -183,30 +226,31 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
     setLoading(true);
     try {
       const payload = {
-        student_number: formData.student_number.trim(),
-        position: formData.position.trim(),
-        first_name: formData.first_name.trim(),
-        last_name: formData.last_name.trim(),
-        year: formData.year.trim(),
-        section: formData.section.trim(),
+        student_number: studentNumber,
+        position,
+        first_name: firstName,
+        last_name: lastName,
+        year,
+        section,
         role: formData.role,
         can_add: formData.can_add,
         can_edit: formData.can_edit,
         can_delete: formData.can_delete,
         can_moderate: formData.can_moderate,
       };
-      if (formData.password) payload.password = formData.password.trim();
+      if (password) payload.password = password;
 
       await onSubmit(payload);
-      handleClose();
     } catch (submitError) {
-      setError(submitError.message || "Unable to save officer account.");
+      const errorMsg =
+        submitError.response?.data?.message ||
+        submitError.message ||
+        "Unable to save officer account.";
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
   };
-
-  const isCustomize = formData.role === "customize";
 
   return (
     <Dialog
@@ -265,15 +309,40 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
             size="small"
           />
 
-          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-            <TextField
-              label="Position"
-              name="position"
-              value={formData.position}
-              onChange={handleChange}
-              disabled={loading}
-              required
-            />
+          {/* Position */}
+          <Autocomplete
+            freeSolo
+            options={POSITION_OPTIONS}
+            value={formData.position}
+            onInputChange={(event, newInputValue) => {
+              setFormData((prev) => ({ ...prev, position: newInputValue }));
+              setError("");
+            }}
+            onChange={(event, newValue) => {
+              setFormData((prev) => ({ ...prev, position: newValue || "" }));
+              setError("");
+            }}
+            disabled={loading}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Position"
+                name="position"
+                required
+                size="small"
+                placeholder="Select or type position"
+              />
+            )}
+          />
+
+          {/* Year & Section Row */}
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+              gap: 2,
+            }}
+          >
             <TextField
               label="Year"
               name="year"
@@ -281,18 +350,20 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
               onChange={handleChange}
               disabled={loading}
               required
+              size="small"
+              placeholder="e.g. 1"
+            />
+            <TextField
+              label="Section"
+              name="section"
+              value={formData.section}
+              onChange={handleChange}
+              disabled={loading}
+              required
+              size="small"
+              placeholder="e.g. A"
             />
           </Box>
-
-          <TextField
-            label="Section"
-            name="section"
-            value={formData.section}
-            onChange={handleChange}
-            disabled={loading}
-            required
-            size="small"
-          />
 
           {/* Role */}
           <FormControl fullWidth size="small" disabled={loading}>
@@ -303,11 +374,10 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
               label="Role"
               onChange={handleChange}
             >
-              <MenuItem value="mayor">Mayor</MenuItem>
-              <MenuItem value="vice-mayor">Vice Mayor</MenuItem>
-              <MenuItem value="secretary">Secretary</MenuItem>
-              <MenuItem value="treasurer">Treasurer</MenuItem>
-              <MenuItem value="peace-officer">Peace Officer</MenuItem>
+              <MenuItem value="officer">Officer (Add, Edit, Delete)</MenuItem>
+              <MenuItem value="moderator">Moderator (Add, Edit, Moderate)</MenuItem>
+              <MenuItem value="viewer">Viewer (Read Only)</MenuItem>
+              <MenuItem value="customize">Custom Permissions</MenuItem>
             </Select>
           </FormControl>
 
@@ -324,7 +394,7 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
             <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>
               Permissions
             </Typography>
-            <Box sx={{ display: "flex", flexDirection: "column" }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
               <FormControlLabel
                 control={
                   <Checkbox
@@ -448,8 +518,9 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
         <Button
           onClick={handleSubmit}
           variant="contained"
-          color="error"
+          color="primary"
           disabled={loading}
+          startIcon={loading ? <CircularProgress size={18} color="inherit" /> : null}
         >
           {isEdit ? "Update Account" : "Create Account"}
         </Button>
@@ -459,3 +530,4 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
 }
 
 export default AccountForm;
+

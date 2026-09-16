@@ -187,7 +187,7 @@ ALTER TABLE `officer`
 --
 ALTER TABLE `officer_role`
   ADD PRIMARY KEY (`officer_role_id`),
-  ADD KEY `officer_id` (`officer_id`);
+  ADD UNIQUE KEY `officer_id` (`officer_id`);
 
 --
 -- Indexes for table `room`

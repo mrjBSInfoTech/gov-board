@@ -110,7 +110,8 @@ export default function Dashboard() {
       setOpenAccountForm(false);
     } catch (err) {
       console.error("Error saving account:", err);
-      setAccountErrorMessage(err.message || "Error saving account", "error");
+      showSnackbar(err.message || "Error saving account", "error");
+      throw err;
     }
   };
 
@@ -123,7 +124,7 @@ export default function Dashboard() {
       showSnackbar("Account deleted successfully", "success");
     } catch (err) {
       console.error("Error deleting account:", err, "error");
-      setAccountErrorMessage(err.message || "Error deleting account", "error");
+      showSnackbar(err.message || "Error deleting account", "error");
     }
   };
 
