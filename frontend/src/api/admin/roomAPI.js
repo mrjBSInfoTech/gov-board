@@ -52,6 +52,16 @@ export const fetchRoom = async (id) => {
   }
 };
 
+// GET announcements for a room
+export const fetchRoomAnnouncements = async (id) => {
+  try {
+    const res = await api.get(`/rooms/${id}/announcements`);
+    return res.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+
 // POST create new room
 export const addRoom = async (formData) => {
   try {

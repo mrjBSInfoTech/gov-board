@@ -17,6 +17,7 @@ import officerDashboardRoutes from "./routes/officer/officerDashboard.js";
 import officerAnnouncementRoutes from "./routes/officer/officerAnnouncement.js";
 // Routes (Student)
 import studentAuthenticateRoutes from "./routes/student/studentAuthenticate.js";
+import studentAnnouncementRoutes from "./routes/student/studentAnnouncement.js";
 
 dotenv.config();
 
@@ -49,6 +50,7 @@ app.use("/api/officer/dashboard", officerDashboardRoutes);
 app.use("/api/officer/announcements", officerAnnouncementRoutes);
 // Routes (Student)
 app.use("/api/student/authenticate", studentAuthenticateRoutes);
+app.use("/api/student/announcements", studentAnnouncementRoutes);
 
 // Handle 404 (unknown routes)
 app.use((req, res) => {

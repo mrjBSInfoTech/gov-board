@@ -26,6 +26,7 @@ import {
   addAnnouncement,
   updateAnnouncement,
   deleteAnnouncement,
+  validateRoomCode,
 } from "../../api/officer/announcementAPI";
 
 // Slide Transition for Snackbar
@@ -35,9 +36,17 @@ function SlideTransition(props) {
 
 export default function AnnouncementPage() {
   const [announcements, setAnnouncements] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Room states
+  const [joinedRoom, setJoinedRoom] = useState(() => {
+    const savedRoom = localStorage.getItem("joinedRoom");
+    return savedRoom ? JSON.parse(savedRoom) : null;
+  });
+  const [roomCodeInput, setRoomCodeInput] = useState("");
+  const [roomLoading, setRoomLoading] = useState(false);
 
   // Modal states
   const [formOpen, setFormOpen] = useState(false);
@@ -65,11 +74,12 @@ export default function AnnouncementPage() {
   };
 
   // Fetch announcements list
-  const loadAnnouncements = async () => {
+  const loadAnnouncements = async (roomId) => {
+    if (!roomId) return;
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchAnnouncements();
+      const data = await fetchAnnouncements(roomId);
       setAnnouncements(data || []);
     } catch (err) {
       console.error("Error loading announcements:", err);
@@ -80,8 +90,35 @@ export default function AnnouncementPage() {
   };
 
   useEffect(() => {
-    loadAnnouncements();
-  }, []);
+    if (joinedRoom) {
+      loadAnnouncements(joinedRoom.room_id);
+    }
+  }, [joinedRoom]);
+
+  const handleJoinRoom = async (e) => {
+    e.preventDefault();
+    if (!roomCodeInput.trim()) return;
+    
+    setRoomLoading(true);
+    setError(null);
+    try {
+      const room = await validateRoomCode(roomCodeInput.trim());
+      setJoinedRoom(room);
+      localStorage.setItem("joinedRoom", JSON.stringify(room));
+      showSnackbar(`Joined room: ${room.room_name}`, "success");
+    } catch (err) {
+      setError(err.message || "Invalid room code.");
+    } finally {
+      setRoomLoading(false);
+    }
+  };
+
+  const handleLeaveRoom = () => {
+    setJoinedRoom(null);
+    localStorage.removeItem("joinedRoom");
+    setAnnouncements([]);
+    setRoomCodeInput("");
+  };
 
   // Handlers for Form
   const handleOpenAddForm = () => {
@@ -104,15 +141,16 @@ export default function AnnouncementPage() {
   const handleFormSubmit = async (formData) => {
     setFormLoading(true);
     try {
+      const payload = { ...formData, room_id: joinedRoom?.room_id };
       if (selectedAnnouncement?.announcement_id) {
-        await updateAnnouncement(selectedAnnouncement.announcement_id, formData);
+        await updateAnnouncement(selectedAnnouncement.announcement_id, payload);
         showSnackbar("Announcement updated successfully!", "success");
       } else {
-        await addAnnouncement(formData);
+        await addAnnouncement(payload);
         showSnackbar("Announcement created successfully!", "success");
       }
       handleCloseForm();
-      await loadAnnouncements();
+      await loadAnnouncements(joinedRoom.room_id);
     } catch (err) {
       console.error("Form submit error:", err);
       showSnackbar(err.message || "Failed to save announcement", "error");
@@ -140,7 +178,7 @@ export default function AnnouncementPage() {
       await deleteAnnouncement(id);
       showSnackbar("Announcement deleted successfully!", "success");
       handleCloseDeleteDialog();
-      await loadAnnouncements();
+      await loadAnnouncements(joinedRoom.room_id);
     } catch (err) {
       console.error("Delete error:", err);
       showSnackbar(err.message || "Failed to delete announcement", "error");
@@ -179,33 +217,93 @@ export default function AnnouncementPage() {
             variant="h4"
             sx={{ fontWeight: "bold", fontSize: { xs: 24, sm: 32 } }}
           >
-            Announcements
+            Announcements {joinedRoom && `- ${joinedRoom.room_name}`}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Manage and post announcements for students and members
+            {joinedRoom ? `Managing announcements for room ${joinedRoom.room_number}` : "Join a room to manage and post announcements"}
           </Typography>
         </Box>
 
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={handleOpenAddForm}
-          sx={{
-            borderRadius: 2,
-            px: 3,
-            py: 1,
-            fontWeight: "bold",
-            textTransform: "none",
-            boxShadow: "0 4px 12px rgba(25, 118, 210, 0.3)",
-          }}
-        >
-          Add Announcement
-        </Button>
+        {joinedRoom && (
+          <Box sx={{ display: "flex", gap: 2 }}>
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={handleLeaveRoom}
+              sx={{ borderRadius: 2, textTransform: "none", fontWeight: "bold" }}
+            >
+              Leave Room
+            </Button>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<AddIcon />}
+              onClick={handleOpenAddForm}
+              sx={{
+                borderRadius: 2,
+                px: 3,
+                py: 1,
+                fontWeight: "bold",
+                textTransform: "none",
+                boxShadow: "0 4px 12px rgba(25, 118, 210, 0.3)",
+              }}
+            >
+              Add Announcement
+            </Button>
+          </Box>
+        )}
       </Box>
 
+      {/* Join Room Form */}
+      {!joinedRoom && (
+        <Paper
+          elevation={0}
+          sx={{
+            p: 4,
+            mb: 3,
+            borderRadius: 3,
+            border: "1px solid rgba(0, 0, 0, 0.08)",
+            bgcolor: "background.paper",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            maxWidth: 500,
+            mx: "auto",
+            mt: 4,
+          }}
+        >
+          <CampaignIcon sx={{ fontSize: 48, color: "primary.main", mb: 2 }} />
+          <Typography variant="h6" sx={{ mb: 1, fontWeight: "bold" }}>
+            Join a Room
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3, textAlign: "center" }}>
+            Enter a room code to view and manage its announcements.
+          </Typography>
+          
+          <Box component="form" onSubmit={handleJoinRoom} sx={{ width: "100%", display: "flex", gap: 2 }}>
+            <TextField
+              fullWidth
+              placeholder="Enter Room Code (e.g. bly-ogts)"
+              value={roomCodeInput}
+              onChange={(e) => setRoomCodeInput(e.target.value)}
+              disabled={roomLoading}
+              size="small"
+            />
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={!roomCodeInput.trim() || roomLoading}
+              sx={{ px: 3, fontWeight: "bold", whiteSpace: "nowrap" }}
+            >
+              {roomLoading ? "Joining..." : "Join"}
+            </Button>
+          </Box>
+        </Paper>
+      )}
+
       {/* Search Bar */}
-      <Paper
+      {joinedRoom && (
+        <Paper
         elevation={0}
         sx={{
           p: 2,
@@ -230,6 +328,7 @@ export default function AnnouncementPage() {
           size="small"
         />
       </Paper>
+      )}
 
       {/* Error state */}
       {error && (
@@ -239,67 +338,66 @@ export default function AnnouncementPage() {
       )}
 
       {/* Loading state */}
-      {loading ? (
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            minHeight: 300,
-          }}
-        >
-          <CircularProgress />
-        </Box>
-      ) : filteredAnnouncements.length === 0 ? (
-        /* Empty state */
-        <Paper
-          elevation={0}
-          sx={{
-            p: 6,
-            textAlign: "center",
-            borderRadius: 3,
-            border: "1px dashed rgba(0, 0, 0, 0.15)",
-            bgcolor: "grey.50",
-          }}
-        >
-          <CampaignIcon sx={{ fontSize: 64, color: "text.disabled", mb: 2 }} />
-          <Typography variant="h6" color="text.secondary" gutterBottom>
-            {searchTerm ? "No announcements found matching your search" : "No announcements available"}
-          </Typography>
-          <Typography variant="body2" color="text.disabled" sx={{ mb: 3 }}>
-            {searchTerm
-              ? "Try adjusting your search query."
-              : "Click the button below to create your first announcement."}
-          </Typography>
-          {!searchTerm && (
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={handleOpenAddForm}
-            >
-              Add Announcement
-            </Button>
-          )}
-        </Paper>
-      ) : (
-        /* Grid of Announcements */
-        <Grid container spacing={3}>
-          {filteredAnnouncements.map((announcement) => (
-            <Grid
-              item
-              xs={12}
-              sm={6}
-              md={4}
-              key={announcement.announcement_id}
-            >
-              <AnnouncementCard
-                announcement={announcement}
-                onEdit={handleOpenEditForm}
-                onDelete={handleOpenDeleteDialog}
-              />
-            </Grid>
-          ))}
-        </Grid>
+      {joinedRoom && (
+        loading ? (
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              minHeight: 300,
+            }}
+          >
+            <CircularProgress />
+          </Box>
+        ) : filteredAnnouncements.length === 0 ? (
+          /* Empty state */
+          <Paper
+            elevation={0}
+            sx={{
+              p: 6,
+              textAlign: "center",
+              borderRadius: 3,
+              border: "1px dashed rgba(0, 0, 0, 0.15)",
+              bgcolor: "grey.50",
+            }}
+          >
+            <CampaignIcon sx={{ fontSize: 64, color: "text.disabled", mb: 2 }} />
+            <Typography variant="h6" color="text.secondary" gutterBottom>
+              {searchTerm ? "No announcements found matching your search" : "No announcements in this room"}
+            </Typography>
+            <Typography variant="body2" color="text.disabled" sx={{ mb: 3 }}>
+              {searchTerm
+                ? "Try adjusting your search query."
+                : "Click the button below to create your first announcement."}
+            </Typography>
+            {!searchTerm && (
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleOpenAddForm}
+              >
+                Add Announcement
+              </Button>
+            )}
+          </Paper>
+        ) : (
+          /* Centered Feed of Announcements */
+          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+            {filteredAnnouncements.map((announcement) => (
+              <Box
+                key={announcement.announcement_id}
+                sx={{ width: "100%", maxWidth: 600 }}
+              >
+                <AnnouncementCard
+                  announcement={announcement}
+                  onEdit={handleOpenEditForm}
+                  onDelete={handleOpenDeleteDialog}
+                />
+              </Box>
+            ))}
+          </Box>
+        )
       )}
 
       {/* Modal Dialogs */}

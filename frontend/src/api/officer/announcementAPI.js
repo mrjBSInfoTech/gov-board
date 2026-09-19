@@ -32,12 +32,24 @@ const handleError = (error) => {
 };
 
 // Fetch all announcements
-export const fetchAnnouncements = async () => {
+export const fetchAnnouncements = async (roomId = null) => {
   try {
-    const res = await api.get("/officer/announcements");
+    const url = roomId ? `/officer/announcements?roomId=${roomId}` : "/officer/announcements";
+    const res = await api.get(url);
     return res.data;
   } catch (error) {
     console.error("Error in fetchAnnouncements:", error);
+    handleError(error);
+  }
+};
+
+// Validate room code
+export const validateRoomCode = async (roomCode) => {
+  try {
+    const res = await api.get(`/officer/announcements/room/validate/${roomCode}`);
+    return res.data;
+  } catch (error) {
+    console.error("Error in validateRoomCode:", error);
     handleError(error);
   }
 };

@@ -43,142 +43,142 @@ function AnnouncementCard({ announcement, onEdit, onDelete }) {
         width: "100%",
         display: "flex",
         flexDirection: "column",
-        borderRadius: 2.5,
+        borderRadius: 4,
         bgcolor: "#ffffff",
-        border: "1px solid #e4e6eb",
-        boxShadow: "0 1px 2px rgba(0, 0, 0, 0.08)",
-        transition: "box-shadow 0.2s ease-in-out",
+        border: "1px solid",
+        borderColor: "grey.200",
+        boxShadow: "0 12px 24px -12px rgba(0,0,0,0.08)",
+        transition: "all 0.3s ease",
         "&:hover": {
-          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.12)",
+          transform: "translateY(-6px)",
+          boxShadow: "0 16px 32px -12px rgba(0,0,0,0.15)",
+          borderColor: "primary.light",
         },
+        position: "relative",
         overflow: "hidden",
       }}
     >
-      {/* Facebook Card Top Header: Post Date & Action Buttons */}
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          px: 2.5,
-          pt: 2,
-          pb: 1,
-        }}
-      >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+      <Box sx={{ p: { xs: 2.5, sm: 3 } }}>
+        {/* Header: Date and Actions */}
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2.5 }}>
           <Typography
             variant="caption"
-            sx={{ fontWeight: 600, fontSize: "0.825rem" }}
+            color="text.secondary"
+            sx={{ fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}
           >
-            Date Published: {formatDate(announcement.date_created)}
+            {formatDate(announcement.date_created)}
           </Typography>
+
+          {/* Action Buttons */}
+          {(onEdit || onDelete) && (
+            <Box sx={{ display: "flex", gap: 1 }}>
+              {onEdit && (
+                <Tooltip title="Edit Post">
+                  <IconButton
+                    size="small"
+                    onClick={() => onEdit(announcement)}
+                    sx={{
+                      bgcolor: "grey.50",
+                      color: "text.secondary",
+                      border: "1px solid",
+                      borderColor: "grey.200",
+                      "&:hover": { bgcolor: "primary.50", color: "primary.main", borderColor: "primary.main" },
+                    }}
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+              {onDelete && (
+                <Tooltip title="Delete Post">
+                  <IconButton
+                    size="small"
+                    onClick={() => onDelete(announcement)}
+                    sx={{
+                      bgcolor: "grey.50",
+                      color: "text.secondary",
+                      border: "1px solid",
+                      borderColor: "grey.200",
+                      "&:hover": { bgcolor: "error.50", color: "error.main", borderColor: "error.main" },
+                    }}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Box>
+          )}
         </Box>
 
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-          {onEdit && (
-            <Tooltip title="Edit Post">
-              <IconButton
-                size="small"
-                onClick={() => onEdit(announcement)}
-                sx={{
-                  color: "text.secondary",
-                  "&:hover": { bgcolor: "#f0f2f5", color: "primary.main" },
-                }}
-              >
-                <EditIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )}
-          {onDelete && (
-            <Tooltip title="Delete Post">
-              <IconButton
-                size="small"
-                onClick={() => onDelete(announcement)}
-                sx={{
-                  color: "text.secondary",
-                  "&:hover": { bgcolor: "#fde8e8", color: "error.main" },
-                }}
-              >
-                <DeleteIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )}
-        </Box>
-      </Box>
-
-      {/* Post Text Content (Displayed BEFORE image, just like Facebook) */}
-      <Box sx={{ px: 2.5, py: 1 }}>
+        {/* Body */}
         <Typography
           variant="body1"
           sx={{
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",
-            color: "#050505",
-            fontSize: "0.95rem",
-            lineHeight: 1.5,
-            fontWeight: 400,
+            color: "text.primary",
+            fontSize: "1.05rem",
+            lineHeight: 1.6,
+            fontWeight: 500,
+            mb: imageUrl ? 3 : (announcement.link ? 2 : 0),
           }}
         >
           {announcement.announcement_body}
         </Typography>
 
-        {/* Optional Link Preview */}
+        {/* Link */}
         {announcement.link && (
-          <Box
+          <MuiLink
+            href={
+              announcement.link.startsWith("http")
+                ? announcement.link
+                : `https://${announcement.link}`
+            }
+            target="_blank"
+            rel="noopener noreferrer"
+            underline="none"
             sx={{
-              mt: 1.5,
-              p: 1.5,
-              borderRadius: 1.5,
-              bgcolor: "#f0f2f5",
-              border: "1px solid #e4e6eb",
-              display: "flex",
+              display: "inline-flex",
               alignItems: "center",
-              justifyContent: "space-between",
               gap: 1,
+              px: 3,
+              py: 1,
+              borderRadius: 8,
+              bgcolor: "primary.50",
+              color: "primary.main",
+              fontWeight: 600,
+              fontSize: "0.875rem",
+              mb: imageUrl ? 3 : 0,
+              transition: "all 0.2s",
+              wordBreak: "break-all",
+              "&:hover": {
+                bgcolor: "primary.100",
+              }
             }}
           >
-            <MuiLink
-              href={
-                announcement.link.startsWith("http")
-                  ? announcement.link
-                  : `https://${announcement.link}`
-              }
-              target="_blank"
-              rel="noopener noreferrer"
-              underline="hover"
+            {announcement.link} <LaunchIcon sx={{ fontSize: 16, flexShrink: 0 }} />
+          </MuiLink>
+        )}
+
+        {/* Image */}
+        {imageUrl && (
+          <Box sx={{ width: "100%", mt: 1 }}>
+            <Box
+              component="img"
+              src={imageUrl}
+              alt="Announcement Attachment"
+              onError={() => setImageError(true)}
               sx={{
-                fontWeight: 600,
-                fontSize: "0.85rem",
-                color: "#1877f2",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 0.5,
-                wordBreak: "break-all",
+                width: "100%",
+                maxHeight: 480,
+                objectFit: "cover",
+                borderRadius: 3,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
               }}
-            >
-              {announcement.link} <LaunchIcon sx={{ fontSize: 14 }} />
-            </MuiLink>
+            />
           </Box>
         )}
       </Box>
-
-      {/* Post Attached Media (Only rendered if an image exists) */}
-      {imageUrl && (
-        <Box sx={{ mt: 1, width: "100%", bgcolor: "#f0f2f5" }}>
-          <CardMedia
-            component="img"
-            image={imageUrl}
-            alt="Announcement Attachment"
-            onError={() => setImageError(true)}
-            sx={{
-              width: "100%",
-              maxHeight: 480,
-              objectFit: "cover",
-              display: "block",
-            }}
-          />
-        </Box>
-      )}
     </Card>
   );
 }

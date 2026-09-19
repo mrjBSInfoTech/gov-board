@@ -49,9 +49,11 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-// 🟢 Get all announcements
+// 🟢 Get all announcements (optionally filter by room_id)
 router.get("/", authenticateOfficer, (req, res) => {
-  const sql = `
+  const { roomId } = req.query;
+
+  let sql = `
     SELECT 
       announcement_id,
       room_id,
@@ -60,14 +62,39 @@ router.get("/", authenticateOfficer, (req, res) => {
       image,
       date_created
     FROM announcement
-    ORDER BY date_created DESC, announcement_id DESC
   `;
-  db.query(sql, (err, results) => {
+  const params = [];
+
+  if (roomId) {
+    sql += ` WHERE room_id = ? `;
+    params.push(roomId);
+  }
+
+  sql += ` ORDER BY date_created DESC, announcement_id DESC`;
+
+  db.query(sql, params, (err, results) => {
     if (err) {
       console.error("DB Error:", err);
       return res.status(500).json({ error: err.message });
     }
     res.json(results);
+  });
+});
+
+// 🏢 Validate room code
+router.get("/room/validate/:roomNumber", authenticateOfficer, (req, res) => {
+  const { roomNumber } = req.params;
+  const sql = `SELECT room_id, room_number, room_name FROM room WHERE room_number = ?`;
+  
+  db.query(sql, [roomNumber.trim()], (err, results) => {
+    if (err) {
+      console.error("DB Error:", err);
+      return res.status(500).json({ error: err.message });
+    }
+    if (results.length === 0) {
+      return res.status(404).json({ error: "Room not found. Please check the code." });
+    }
+    res.json(results[0]);
   });
 });
 

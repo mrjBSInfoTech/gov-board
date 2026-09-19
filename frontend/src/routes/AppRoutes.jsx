@@ -52,6 +52,7 @@ export default function AppRoutes() {
             {/* Public student pages */}
             <Route element={<StudentLayout />}>
               <Route path="home" element={<StudentHome />} />
+              <Route path="announcement" element={<StudentAnnouncement />} />
             </Route>
           </Route>
 

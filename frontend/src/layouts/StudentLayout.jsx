@@ -185,6 +185,23 @@ function StudentLayout({ children }) {
             </Typography>
           </Box>
 
+          <Box sx={{ display: { xs: "none", md: "flex" }, alignItems: "center", gap: 2, flexGrow: 1, ml: 4 }}>
+            <Button 
+              color="inherit" 
+              onClick={() => navigate("/student/home")}
+              sx={{ opacity: location.pathname === "/student/home" ? 1 : 0.7 }}
+            >
+              Home
+            </Button>
+            <Button 
+              color="inherit" 
+              onClick={() => navigate("/student/announcement")}
+              sx={{ opacity: location.pathname === "/student/announcement" ? 1 : 0.7 }}
+            >
+              Announcements
+            </Button>
+          </Box>
+
           <Box
             sx={{
               display: "flex",

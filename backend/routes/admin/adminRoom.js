@@ -63,6 +63,29 @@ router.get("/:id", authenticateAdmin, (req, res) => {
   });
 });
 
+// GET announcements for a room
+router.get("/:id/announcements", authenticateAdmin, (req, res) => {
+  const sql = `
+    SELECT 
+      announcement_id,
+      room_id,
+      announcement_body,
+      link,
+      image,
+      date_created
+    FROM announcement
+    WHERE room_id = ?
+    ORDER BY date_created DESC, announcement_id DESC
+  `;
+  db.query(sql, [req.params.id], (err, results) => {
+    if (err) {
+      console.error("DB Error:", err);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(results);
+  });
+});
+
 // POST create new room
 router.post("/", authenticateAdmin, (req, res) => {
   const { room_number, room_name } = req.body;

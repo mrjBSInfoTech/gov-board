@@ -10,18 +10,34 @@ import {
   Typography,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import { fetchRoom } from "../../api/admin/roomAPI";
+import CampaignIcon from "@mui/icons-material/Campaign";
+import { fetchRoom, fetchRoomAnnouncements } from "../../api/admin/roomAPI";
+import AnnouncementCard from "../../components/officer/Announcement/AnnouncementCard";
 
 export default function RoomDetails() {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const [room, setRoom] = useState(null);
+  const [announcements, setAnnouncements] = useState([]);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchRoom(roomId)
-      .then(setRoom)
-      .catch((err) => setError(err.message || "Failed to load room"));
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const roomData = await fetchRoom(roomId);
+        setRoom(roomData);
+        
+        const announcementsData = await fetchRoomAnnouncements(roomId);
+        setAnnouncements(announcementsData || []);
+      } catch (err) {
+        setError(err.message || "Failed to load room details");
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
   }, [roomId]);
 
   return (
@@ -40,22 +56,56 @@ export default function RoomDetails() {
 
       {error ? (
         <Alert severity="error">{error}</Alert>
-      ) : !room ? (
+      ) : loading || !room ? (
         <Box sx={{ display: "flex", justifyContent: "center", mt: 8 }}>
           <CircularProgress />
         </Box>
       ) : (
-        <Paper variant="outlined" sx={{ p: 3, borderRadius: 2 }}>
-          <Typography variant="h4" fontWeight="bold" gutterBottom>
-            {room.room_name}
+        <Box>
+          <Paper variant="outlined" sx={{ p: 3, borderRadius: 2, mb: 4 }}>
+            <Typography variant="h4" fontWeight="bold" gutterBottom>
+              {room.room_name}
+            </Typography>
+            <Typography color="text.secondary">
+              Room code: <strong>{room.room_number}</strong>
+            </Typography>
+            <Typography color="text.secondary" sx={{ mt: 1 }}>
+              Created: {new Date(room.date_created).toLocaleDateString()}
+            </Typography>
+          </Paper>
+
+          <Typography variant="h6" fontWeight="bold" sx={{ mb: 2 }}>
+            Announcements ({announcements.length})
           </Typography>
-          <Typography color="text.secondary">
-            Room code: <strong>{room.room_number}</strong>
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 1 }}>
-            Created: {new Date(room.date_created).toLocaleDateString()}
-          </Typography>
-        </Paper>
+
+          {announcements.length === 0 ? (
+            <Paper
+              elevation={0}
+              sx={{
+                p: 6,
+                textAlign: "center",
+                borderRadius: 3,
+                border: "1px dashed rgba(0, 0, 0, 0.15)",
+                bgcolor: "grey.50",
+              }}
+            >
+              <CampaignIcon sx={{ fontSize: 48, color: "text.disabled", mb: 2 }} />
+              <Typography variant="h6" color="text.secondary">
+                No announcements in this room
+              </Typography>
+            </Paper>
+          ) : (
+            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+              {announcements.map((announcement) => (
+                <Box key={announcement.announcement_id} sx={{ width: "100%", maxWidth: 600 }}>
+                  <AnnouncementCard
+                    announcement={announcement}
+                  />
+                </Box>
+              ))}
+            </Box>
+          )}
+        </Box>
       )}
     </Box>
   );
