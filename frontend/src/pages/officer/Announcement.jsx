@@ -20,6 +20,7 @@ import CampaignIcon from "@mui/icons-material/Campaign";
 import AnnouncementCard from "../../components/officer/Announcement/AnnouncementCard";
 import AnnouncementForm from "../../components/officer/Announcement/AnnouncementForm";
 import AnnouncementDelete from "../../components/officer/Announcement/AnnouncementDelete";
+import RoomTabs from "../../components/room/RoomTabs";
 
 import {
   fetchAnnouncements,
@@ -98,7 +99,7 @@ export default function AnnouncementPage() {
   const handleJoinRoom = async (e) => {
     e.preventDefault();
     if (!roomCodeInput.trim()) return;
-    
+
     setRoomLoading(true);
     setError(null);
     try {
@@ -190,7 +191,9 @@ export default function AnnouncementPage() {
   // Filter announcements based on search term
   const filteredAnnouncements = announcements.filter((item) => {
     const term = searchTerm.toLowerCase();
-    const bodyMatch = (item.announcement_body || "").toLowerCase().includes(term);
+    const bodyMatch = (item.announcement_body || "")
+      .toLowerCase()
+      .includes(term);
     const linkMatch = (item.link || "").toLowerCase().includes(term);
     return bodyMatch || linkMatch;
   });
@@ -220,7 +223,9 @@ export default function AnnouncementPage() {
             Announcements {joinedRoom && `- ${joinedRoom.room_name}`}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {joinedRoom ? `Managing announcements for room ${joinedRoom.room_number}` : "Join a room to manage and post announcements"}
+            {joinedRoom
+              ? `Managing announcements for room ${joinedRoom.room_number}`
+              : "Join a room to manage and post announcements"}
           </Typography>
         </Box>
 
@@ -230,7 +235,11 @@ export default function AnnouncementPage() {
               variant="outlined"
               color="error"
               onClick={handleLeaveRoom}
-              sx={{ borderRadius: 2, textTransform: "none", fontWeight: "bold" }}
+              sx={{
+                borderRadius: 2,
+                textTransform: "none",
+                fontWeight: "bold",
+              }}
             >
               Leave Room
             </Button>
@@ -276,11 +285,19 @@ export default function AnnouncementPage() {
           <Typography variant="h6" sx={{ mb: 1, fontWeight: "bold" }}>
             Join a Room
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3, textAlign: "center" }}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mb: 3, textAlign: "center" }}
+          >
             Enter a room code to view and manage its announcements.
           </Typography>
-          
-          <Box component="form" onSubmit={handleJoinRoom} sx={{ width: "100%", display: "flex", gap: 2 }}>
+
+          <Box
+            component="form"
+            onSubmit={handleJoinRoom}
+            sx={{ width: "100%", display: "flex", gap: 2 }}
+          >
             <TextField
               fullWidth
               placeholder="Enter Room Code (e.g. bly-ogts)"
@@ -304,30 +321,36 @@ export default function AnnouncementPage() {
       {/* Search Bar */}
       {joinedRoom && (
         <Paper
-        elevation={0}
-        sx={{
-          p: 2,
-          mb: 3,
-          borderRadius: 3,
-          border: "1px solid rgba(0, 0, 0, 0.08)",
-          bgcolor: "background.paper",
-        }}
-      >
-        <TextField
-          fullWidth
-          placeholder="Search announcements..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon color="action" />
-              </InputAdornment>
-            ),
+          elevation={0}
+          sx={{
+            p: 2,
+            mb: 3,
+            borderRadius: 3,
+            border: "1px solid rgba(0, 0, 0, 0.08)",
+            bgcolor: "background.paper",
           }}
-          size="small"
-        />
-      </Paper>
+        >
+          <TextField
+            fullWidth
+            placeholder="Search announcements..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon color="action" />
+                </InputAdornment>
+              ),
+            }}
+            size="small"
+          />
+        </Paper>
+      )}
+
+      {joinedRoom && (
+        <Box sx={{ mb: 3 }}>
+          <RoomTabs announcements={announcements} roomId={joinedRoom.room_id} />
+        </Box>
       )}
 
       {/* Error state */}
@@ -338,8 +361,8 @@ export default function AnnouncementPage() {
       )}
 
       {/* Loading state */}
-      {joinedRoom && (
-        loading ? (
+      {joinedRoom &&
+        (loading ? (
           <Box
             sx={{
               display: "flex",
@@ -362,9 +385,13 @@ export default function AnnouncementPage() {
               bgcolor: "grey.50",
             }}
           >
-            <CampaignIcon sx={{ fontSize: 64, color: "text.disabled", mb: 2 }} />
+            <CampaignIcon
+              sx={{ fontSize: 64, color: "text.disabled", mb: 2 }}
+            />
             <Typography variant="h6" color="text.secondary" gutterBottom>
-              {searchTerm ? "No announcements found matching your search" : "No announcements in this room"}
+              {searchTerm
+                ? "No announcements found matching your search"
+                : "No announcements in this room"}
             </Typography>
             <Typography variant="body2" color="text.disabled" sx={{ mb: 3 }}>
               {searchTerm
@@ -383,7 +410,14 @@ export default function AnnouncementPage() {
           </Paper>
         ) : (
           /* Centered Feed of Announcements */
-          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 3,
+            }}
+          >
             {filteredAnnouncements.map((announcement) => (
               <Box
                 key={announcement.announcement_id}
@@ -397,8 +431,7 @@ export default function AnnouncementPage() {
               </Box>
             ))}
           </Box>
-        )
-      )}
+        ))}
 
       {/* Modal Dialogs */}
       <AnnouncementForm

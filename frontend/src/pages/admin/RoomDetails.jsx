@@ -13,6 +13,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CampaignIcon from "@mui/icons-material/Campaign";
 import { fetchRoom, fetchRoomAnnouncements } from "../../api/admin/roomAPI";
 import AnnouncementCard from "../../components/officer/Announcement/AnnouncementCard";
+import RoomTabs from "../../components/room/RoomTabs";
 
 export default function RoomDetails() {
   const { roomId } = useParams();
@@ -28,7 +29,7 @@ export default function RoomDetails() {
       try {
         const roomData = await fetchRoom(roomId);
         setRoom(roomData);
-        
+
         const announcementsData = await fetchRoomAnnouncements(roomId);
         setAnnouncements(announcementsData || []);
       } catch (err) {
@@ -74,6 +75,10 @@ export default function RoomDetails() {
             </Typography>
           </Paper>
 
+          <Box sx={{ mb: 3 }}>
+            <RoomTabs announcements={announcements} roomId={room.room_id} />
+          </Box>
+
           <Typography variant="h6" fontWeight="bold" sx={{ mb: 2 }}>
             Announcements ({announcements.length})
           </Typography>
@@ -89,18 +94,28 @@ export default function RoomDetails() {
                 bgcolor: "grey.50",
               }}
             >
-              <CampaignIcon sx={{ fontSize: 48, color: "text.disabled", mb: 2 }} />
+              <CampaignIcon
+                sx={{ fontSize: 48, color: "text.disabled", mb: 2 }}
+              />
               <Typography variant="h6" color="text.secondary">
                 No announcements in this room
               </Typography>
             </Paper>
           ) : (
-            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 3,
+              }}
+            >
               {announcements.map((announcement) => (
-                <Box key={announcement.announcement_id} sx={{ width: "100%", maxWidth: 600 }}>
-                  <AnnouncementCard
-                    announcement={announcement}
-                  />
+                <Box
+                  key={announcement.announcement_id}
+                  sx={{ width: "100%", maxWidth: 600 }}
+                >
+                  <AnnouncementCard announcement={announcement} />
                 </Box>
               ))}
             </Box>

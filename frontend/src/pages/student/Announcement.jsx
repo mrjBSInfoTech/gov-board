@@ -16,7 +16,11 @@ import CampaignIcon from "@mui/icons-material/Campaign";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import LogoutIcon from "@mui/icons-material/Logout";
 import AnnouncementCard from "../../components/officer/Announcement/AnnouncementCard";
-import { fetchAnnouncements, validateRoomCode } from "../../api/student/announcementAPI";
+import RoomTabs from "../../components/room/RoomTabs";
+import {
+  fetchAnnouncements,
+  validateRoomCode,
+} from "../../api/student/announcementAPI";
 
 // Slide Transition for Snackbar
 function SlideTransition(props) {
@@ -77,7 +81,7 @@ export default function AnnouncementPage() {
   const handleJoinRoom = async (e) => {
     e.preventDefault();
     if (!roomCodeInput.trim()) return;
-    
+
     setRoomLoading(true);
     setError(null);
     try {
@@ -120,7 +124,9 @@ export default function AnnouncementPage() {
           variant="h4"
           sx={{ fontWeight: "bold", fontSize: { xs: 24, sm: 32 } }}
         >
-          {joinedRoom ? `${joinedRoom.room_name} Announcements` : "Announcements"}
+          {joinedRoom
+            ? `${joinedRoom.room_name} Announcements`
+            : "Announcements"}
         </Typography>
 
         {joinedRoom && (
@@ -152,14 +158,17 @@ export default function AnnouncementPage() {
               boxShadow: "0 12px 24px -12px rgba(0,0,0,0.08)",
             }}
           >
-            <MeetingRoomIcon sx={{ fontSize: 64, color: "primary.main", mb: 2 }} />
+            <MeetingRoomIcon
+              sx={{ fontSize: 64, color: "primary.main", mb: 2 }}
+            />
             <Typography variant="h5" fontWeight="bold" gutterBottom>
               Join a Room
             </Typography>
             <Typography color="text.secondary" sx={{ mb: 4 }}>
-              Enter the room code provided by your officer to view announcements.
+              Enter the room code provided by your officer to view
+              announcements.
             </Typography>
-            
+
             <form onSubmit={handleJoinRoom}>
               <TextField
                 fullWidth
@@ -180,50 +189,67 @@ export default function AnnouncementPage() {
                 disabled={!roomCodeInput.trim() || roomLoading}
                 sx={{ py: 1.5, borderRadius: 2 }}
               >
-                {roomLoading ? <CircularProgress size={26} color="inherit" /> : "Join Room"}
+                {roomLoading ? (
+                  <CircularProgress size={26} color="inherit" />
+                ) : (
+                  "Join Room"
+                )}
               </Button>
             </form>
           </Paper>
         </Box>
       ) : (
-        // ANNOUNCEMENTS FEED
-        loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", my: 10 }}>
-            <CircularProgress />
-          </Box>
-        ) : announcements.length === 0 ? (
-          <Paper
-            elevation={0}
-            sx={{
-              p: 6,
-              textAlign: "center",
-              borderRadius: 3,
-              border: "1px dashed rgba(0, 0, 0, 0.15)",
-              bgcolor: "grey.50",
-            }}
-          >
-            <CampaignIcon sx={{ fontSize: 64, color: "text.disabled", mb: 2 }} />
-            <Typography variant="h6" color="text.secondary" gutterBottom>
-              No announcements in this room
-            </Typography>
-            <Typography variant="body2" color="text.disabled">
-              When the officer posts an announcement, it will appear here.
-            </Typography>
-          </Paper>
-        ) : (
-          /* Centered Feed of Announcements */
-          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-            {announcements.map((announcement) => (
-              <Box
-                key={announcement.announcement_id}
-                sx={{ width: "100%", maxWidth: 600 }}
-              >
-                {/* No onEdit or onDelete passed, so buttons are hidden */}
-                <AnnouncementCard announcement={announcement} />
-              </Box>
-            ))}
-          </Box>
-        )
+        <>
+          <RoomTabs announcements={announcements} roomId={joinedRoom.room_id} />
+
+          {/* Announcements feed */}
+          {loading ? (
+            <Box sx={{ display: "flex", justifyContent: "center", my: 10 }}>
+              <CircularProgress />
+            </Box>
+          ) : announcements.length === 0 ? (
+            <Paper
+              elevation={0}
+              sx={{
+                p: 6,
+                textAlign: "center",
+                borderRadius: 3,
+                border: "1px dashed rgba(0, 0, 0, 0.15)",
+                bgcolor: "grey.50",
+              }}
+            >
+              <CampaignIcon
+                sx={{ fontSize: 64, color: "text.disabled", mb: 2 }}
+              />
+              <Typography variant="h6" color="text.secondary" gutterBottom>
+                No announcements in this room
+              </Typography>
+              <Typography variant="body2" color="text.disabled">
+                When the officer posts an announcement, it will appear here.
+              </Typography>
+            </Paper>
+          ) : (
+            /* Centered Feed of Announcements */
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 3,
+              }}
+            >
+              {announcements.map((announcement) => (
+                <Box
+                  key={announcement.announcement_id}
+                  sx={{ width: "100%", maxWidth: 600 }}
+                >
+                  {/* No onEdit or onDelete passed, so buttons are hidden */}
+                  <AnnouncementCard announcement={announcement} />
+                </Box>
+              ))}
+            </Box>
+          )}
+        </>
       )}
 
       {/* Snackbar */}

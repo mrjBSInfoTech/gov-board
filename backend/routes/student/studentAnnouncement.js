@@ -24,7 +24,18 @@ router.get("/room/validate/:roomNumber", authenticateStudent, (req, res) => {
       return res.status(404).json({ error: "Invalid room code" });
     }
 
-    res.json(results[0]);
+    const studentId = req.user.student_id || req.user.id || req.user.admin_id;
+    db.query(
+      "UPDATE student SET room_id = ? WHERE student_id = ?",
+      [results[0].room_id, studentId],
+      (updateErr) => {
+        if (updateErr) {
+          console.error("Room membership update error:", updateErr);
+          return res.status(500).json({ error: "Unable to join room" });
+        }
+        res.json(results[0]);
+      },
+    );
   });
 });
 
