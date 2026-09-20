@@ -74,3 +74,14 @@ export const deleteStudent = async (id) => {
   }
 };
 
+export const promoteStudent = async (id, position, confirmReplace = false) => {
+  try {
+    const res = await api.post(`/students/${id}/promote`, {
+      position,
+      confirmReplace,
+    });
+    return res.data;
+  } catch (error) {
+    handleError(error);
+  }
+};

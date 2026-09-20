@@ -286,7 +286,8 @@ router.delete("/:id", authenticateAdmin, async (req, res) => {
 });
 
 export default router;
-*/}
+*/
+}
 
 import express from "express";
 import bcrypt from "bcryptjs";
@@ -355,6 +356,80 @@ router.get("/", authenticateAdmin, (req, res) => {
   });
 });
 
+router.post("/:id/demote", authenticateAdmin, async (req, res) => {
+  const officerId = Number(req.params.id);
+
+  if (!officerId) {
+    return res.status(400).json({ message: "Officer ID is required." });
+  }
+
+  try {
+    const connection = db.promise();
+    await connection.beginTransaction();
+
+    const [officerRows] = await connection.query(
+      "SELECT * FROM officer WHERE officer_id = ? LIMIT 1",
+      [officerId],
+    );
+
+    if (!officerRows || officerRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ message: "Officer not found" });
+    }
+
+    const officer = officerRows[0];
+
+    await connection.query(
+      `INSERT INTO student (
+        officer_id,
+        room_id,
+        first_name,
+        last_name,
+        student_number,
+        position,
+        year,
+        section,
+        password,
+        date_created
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      [
+        null,
+        null,
+        officer.first_name,
+        officer.last_name,
+        officer.student_number,
+        null,
+        officer.year,
+        officer.section,
+        officer.password,
+      ],
+    );
+
+    await connection.query("DELETE FROM officer_role WHERE officer_id = ?", [
+      officerId,
+    ]);
+
+    await connection.query("DELETE FROM officer WHERE officer_id = ?", [
+      officerId,
+    ]);
+
+    await connection.commit();
+
+    res.json({
+      message: `${officer.first_name} ${officer.last_name} was demoted to student successfully.`,
+    });
+  } catch (error) {
+    console.error("DB error:", error);
+    try {
+      const connection = db.promise();
+      await connection.rollback();
+    } catch (rollbackErr) {
+      console.error("Rollback failed:", rollbackErr);
+    }
+    res.status(500).json({ message: "Database error" });
+  }
+});
+
 // ─── POST create new officer account ─────────────────────────────────
 router.post("/", authenticateAdmin, async (req, res) => {
   const {
@@ -381,10 +456,17 @@ router.post("/", authenticateAdmin, async (req, res) => {
     !year ||
     !section
   ) {
-    return res.status(400).json({ message: "Please fill all the required fields" });
+    return res
+      .status(400)
+      .json({ message: "Please fill all the required fields" });
   }
 
-  const permissions = rolePermissions(role, { can_add, can_edit, can_delete, can_moderate });
+  const permissions = rolePermissions(role, {
+    can_add,
+    can_edit,
+    can_delete,
+    can_moderate,
+  });
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -400,41 +482,61 @@ router.post("/", authenticateAdmin, async (req, res) => {
 
       db.query(
         sqlOfficer,
-        [adminId, student_number.trim(), position.trim(), year, section.trim(), first_name.trim(), last_name.trim(), hashedPassword],
+        [
+          adminId,
+          student_number.trim(),
+          position.trim(),
+          year,
+          section.trim(),
+          first_name.trim(),
+          last_name.trim(),
+          hashedPassword,
+        ],
         (err, result) => {
-        if (err) {
-          return db.rollback(() => {
-            console.error("DB error:", err);
-            res.status(500).json({ message: "Database error" });
-          });
-        }
+          if (err) {
+            return db.rollback(() => {
+              console.error("DB error:", err);
+              res.status(500).json({ message: "Database error" });
+            });
+          }
 
-        const officerId = result.insertId;
+          const officerId = result.insertId;
 
-        // Insert officer_role
-        const sqlRole = `
+          // Insert officer_role
+          const sqlRole = `
           INSERT INTO officer_role (officer_id, role, can_add, can_edit, can_delete, can_moderate)
           VALUES (?, ?, ?, ?, ?, ?)`;
 
-        db.query(
-          sqlRole,
-          [officerId, role || "officer", permissions.can_add, permissions.can_edit, permissions.can_delete, permissions.can_moderate],
-          (err) => {
-            if (err) {
-              return db.rollback(() => {
-                console.error("DB error:", err);
-                res.status(500).json({ message: "Database error" });
-              });
-            }
-
-            db.commit((err) => {
+          db.query(
+            sqlRole,
+            [
+              officerId,
+              role || "officer",
+              permissions.can_add,
+              permissions.can_edit,
+              permissions.can_delete,
+              permissions.can_moderate,
+            ],
+            (err) => {
               if (err) {
-                return db.rollback(() => res.status(500).json({ message: "Commit error" }));
+                return db.rollback(() => {
+                  console.error("DB error:", err);
+                  res.status(500).json({ message: "Database error" });
+                });
               }
-              res.status(201).json({ message: "Officer account created sucessfully"});
-            });
-          }
-        );
+
+              db.commit((err) => {
+                if (err) {
+                  return db.rollback(() =>
+                    res.status(500).json({ message: "Commit error" }),
+                  );
+                }
+                res
+                  .status(201)
+                  .json({ message: "Officer account created sucessfully" });
+              });
+            },
+          );
         },
       );
     });
@@ -462,8 +564,17 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
     can_moderate,
   } = req.body;
 
-  if (!first_name || !last_name || !student_number || !position || !year || !section) {
-    return res.status(400).json({ message: "Please fill all the required fields" });
+  if (
+    !first_name ||
+    !last_name ||
+    !student_number ||
+    !position ||
+    !year ||
+    !section
+  ) {
+    return res
+      .status(400)
+      .json({ message: "Please fill all the required fields" });
   }
 
   try {
@@ -475,10 +586,27 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
       if (password) {
         const hashedPassword = await bcrypt.hash(password, 10);
         sqlOfficer = `UPDATE officer SET student_number = ?, position = ?, year = ?, section = ?, first_name = ?, last_name = ?, password = ? WHERE officer_id = ?`;
-        officerParams = [student_number.trim(), position.trim(), year, section.trim(), first_name.trim(), last_name.trim(), hashedPassword, id];
+        officerParams = [
+          student_number.trim(),
+          position.trim(),
+          year,
+          section.trim(),
+          first_name.trim(),
+          last_name.trim(),
+          hashedPassword,
+          id,
+        ];
       } else {
         sqlOfficer = `UPDATE officer SET student_number = ?, position = ?, year = ?, section = ?, first_name = ?, last_name = ? WHERE officer_id = ?`;
-        officerParams = [student_number.trim(), position.trim(), year, section.trim(), first_name.trim(), last_name.trim(), id];
+        officerParams = [
+          student_number.trim(),
+          position.trim(),
+          year,
+          section.trim(),
+          first_name.trim(),
+          last_name.trim(),
+          id,
+        ];
       }
 
       db.query(sqlOfficer, officerParams, (err, result) => {
@@ -489,11 +617,18 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
           });
         }
         if (result.affectedRows === 0) {
-          return db.rollback(() => res.status(404).json({ message: "Officer not found" }));
+          return db.rollback(() =>
+            res.status(404).json({ message: "Officer not found" }),
+          );
         }
 
         // Update the existing role row instead of creating duplicates.
-        const permissions = rolePermissions(role || "officer", { can_add, can_edit, can_delete, can_moderate });
+        const permissions = rolePermissions(role || "officer", {
+          can_add,
+          can_edit,
+          can_delete,
+          can_moderate,
+        });
         const roleParams = [
           role || "officer",
           permissions.can_add,
@@ -534,7 +669,10 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
               }
 
               db.commit((err) => {
-                if (err) return db.rollback(() => res.status(500).json({ message: "Commit error" }));
+                if (err)
+                  return db.rollback(() =>
+                    res.status(500).json({ message: "Commit error" }),
+                  );
                 res.json({ message: "Officer account updated" });
               });
             });
@@ -559,16 +697,20 @@ router.delete("/:id", authenticateAdmin, (req, res) => {
       return res.status(500).json({ message: "Database error" });
     }
 
-    db.query("DELETE FROM officer WHERE officer_id = ?", [id], (err, result) => {
-      if (err) {
-        console.error("DB error:", err);
-        return res.status(500).json({ message: "Database error" });
-      }
-      if (result.affectedRows === 0) {
-        return res.status(404).json({ message: "Officer not found" });
-      }
-      res.json({ message: "Officer account deleted sucessfully" });
-    });
+    db.query(
+      "DELETE FROM officer WHERE officer_id = ?",
+      [id],
+      (err, result) => {
+        if (err) {
+          console.error("DB error:", err);
+          return res.status(500).json({ message: "Database error" });
+        }
+        if (result.affectedRows === 0) {
+          return res.status(404).json({ message: "Officer not found" });
+        }
+        res.json({ message: "Officer account deleted sucessfully" });
+      },
+    );
   });
 });
 

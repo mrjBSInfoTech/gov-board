@@ -3,33 +3,34 @@ import { Helmet } from "react-helmet-async";
 import {
   Alert,
   Box,
-  Button,
   CircularProgress,
+  FormControl,
   IconButton,
-  Paper,
+  InputAdornment,
+  MenuItem,
+  Select,
   Slide,
   Snackbar,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
+  TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import VisibilityIcon from "@mui/icons-material/Visibility";
+import PersonRemoveAlt1Icon from "@mui/icons-material/PersonRemoveAlt1";
+import SearchIcon from "@mui/icons-material/Search";
 import AccountInfo from "../../components/admin/Account/AccountInfo";
 import AccountForm from "../../components/admin/Account/AccountForm";
 import AccountDelete from "../../components/admin/Account/AccountDelete";
+import AccountDemote from "../../components/admin/Account/AccountDemote";
+import PeopleCardList from "../../components/common/PeopleCardList";
 import {
   fetchAccounts,
   addAccount,
   updateAccount,
   deleteAccount,
+  demoteAccount,
 } from "../../api/admin/accountAPI";
 
 // Slide Transition for Snackbar
@@ -42,12 +43,31 @@ export default function Dashboard() {
   const [openAccountCard, setOpenAccountCard] = useState(false);
   const [openAccountForm, setOpenAccountForm] = useState(false);
   const [openAccountDelete, setOpenAccountDelete] = useState(false);
+  const [openAccountDemote, setOpenAccountDemote] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [accountErrorMessage, setAccountErrorMessage] = useState("");
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [snackbarSeverity, setSnackbarSeverity] = useState("success");
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedSection, setSelectedSection] = useState("All");
+
+  const sectionOptions = [
+    "All",
+    ...new Set(accounts.map((account) => account.section).filter(Boolean)),
+  ];
+
+  const filteredAccounts = accounts.filter((account) => {
+    const matchesSection =
+      selectedSection === "All" || account.section === selectedSection;
+    const keyword = searchTerm.trim().toLowerCase();
+    const searchable =
+      `${account.first_name} ${account.last_name} ${account.student_number} ${account.position} ${account.section}`.toLowerCase();
+
+    const matchesSearch = !keyword || searchable.includes(keyword);
+    return matchesSection && matchesSearch;
+  });
 
   // Fetch all accounts from API
   const loadAccounts = async () => {
@@ -128,6 +148,27 @@ export default function Dashboard() {
     }
   };
 
+  const handleDemoteAccount = async (account) => {
+    try {
+      await demoteAccount(account.officer_id);
+      await loadAccounts();
+      setOpenAccountDemote(false);
+      setSelectedAccount(null);
+      showSnackbar(
+        `${account.first_name} ${account.last_name} was demoted to student successfully`,
+        "success",
+      );
+    } catch (err) {
+      console.error("Error demoting account:", err);
+      showSnackbar(err.message || "Unable to demote account", "error");
+    }
+  };
+
+  const handleOpenAccountDemote = (account) => {
+    setSelectedAccount(account);
+    setOpenAccountDemote(true);
+  };
+
   // Snackbar handlers
   const showSnackbar = (message, severity = "success") => {
     setSnackbarMessage(message);
@@ -172,90 +213,120 @@ export default function Dashboard() {
         >
           Officials
         </Typography>
-
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={handleOpenAccountAdd}
-          sx={{
-            width: { xs: "100%", sm: 150 },
-            height: { xs: 35, sm: 45 },
-            minWidth: { xs: 45, sm: 50 },
-            fontSize: { xs: 12, sm: 16 },
-            padding: 0,
-          }}
-        >
-          Create Account
-        </Button>
       </Box>
 
-      {/* Table */}
+      {!loading && (
+        <Box
+          sx={{
+            display: "flex",
+            gap: 2,
+            mb: 2,
+            flexDirection: { xs: "column", sm: "row" },
+            alignItems: { xs: "stretch", sm: "center" },
+          }}
+        >
+          <TextField
+            fullWidth
+            size="small"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search by name or student number"
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+            sx={{
+              maxWidth: { sm: 360 },
+              "& .MuiOutlinedInput-root": {
+                backgroundColor: "rgba(15, 23, 42, 0.55)",
+                borderRadius: 2,
+              },
+            }}
+          />
+
+          <FormControl size="small" sx={{ minWidth: 170 }}>
+            <Select
+              value={selectedSection}
+              onChange={(event) => setSelectedSection(event.target.value)}
+              displayEmpty
+              sx={{
+                backgroundColor: "rgba(15, 23, 42, 0.55)",
+                borderRadius: 2,
+                color: "#fff",
+              }}
+            >
+              {sectionOptions.map((section) => (
+                <MenuItem key={section} value={section}>
+                  {section === "All" ? "All Sections" : `Section ${section}`}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Box>
+      )}
+
+      {/* People cards */}
       {loading ? (
         <Box sx={{ display: "flex", justifyContent: "center", mt: 6 }}>
           <CircularProgress />
         </Box>
-      ) : accounts.length === 0 ? (
-        <Box sx={{ textAlign: "center", mt: 6 }}>
-          <Typography color="text.secondary">No officials found.</Typography>
-        </Box>
       ) : (
-        <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ "& th": { fontWeight: "bold" } }}>
-                <TableCell>Student Number</TableCell>
-                <TableCell>Position</TableCell>
-                <TableCell>Year</TableCell>
-                <TableCell>Section</TableCell>
-                <TableCell>First Name</TableCell>
-                <TableCell>Last Name</TableCell>
-                <TableCell align="center">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {accounts.map((account) => (
-                <TableRow key={account.officer_id} hover>
-                  <TableCell>{account.student_number}</TableCell>
-                  <TableCell>{account.position || "-"}</TableCell>
-                  <TableCell>{account.year || "-"}</TableCell>
-                  <TableCell>{account.section || "-"}</TableCell>
-                  <TableCell>{account.first_name}</TableCell>
-                  <TableCell>{account.last_name}</TableCell>
-                  <TableCell align="center">
-                    <Tooltip title="View">
-                      <IconButton
-                        size="small"
-                        color="default"
-                        onClick={() => handleOpenAccountCard(account)}
-                      >
-                        <VisibilityIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Edit">
-                      <IconButton
-                        size="small"
-                        color="primary"
-                        onClick={() => handleOpenAccountEdit(account)}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Delete">
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => handleOpenAccountDelete(account)}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <PeopleCardList
+          items={filteredAccounts}
+          rowKey={(account) => account.officer_id}
+          emptyMessage="No officials found for this filter."
+          columns={[
+            { label: "Student Number", key: "student_number" },
+            { label: "Position", key: "position" },
+            { label: "Year", key: "year" },
+            { label: "Section", key: "section" },
+            { label: "First Name", key: "first_name" },
+            { label: "Last Name", key: "last_name" },
+          ]}
+          renderActions={(account) => (
+            <>
+              <Tooltip title="View">
+                <IconButton
+                  size="small"
+                  color="default"
+                  onClick={() => handleOpenAccountCard(account)}
+                >
+                  <VisibilityIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Edit">
+                <IconButton
+                  size="small"
+                  color="primary"
+                  onClick={() => handleOpenAccountEdit(account)}
+                >
+                  <EditIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Demote">
+                <IconButton
+                  size="small"
+                  color="warning"
+                  onClick={() => handleOpenAccountDemote(account)}
+                >
+                  <PersonRemoveAlt1Icon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Delete">
+                <IconButton
+                  size="small"
+                  color="error"
+                  onClick={() => handleOpenAccountDelete(account)}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </>
+          )}
+        />
       )}
 
       {/* Modals */}
@@ -275,6 +346,17 @@ export default function Dashboard() {
         handleClose={() => setOpenAccountDelete(false)}
         selectedAccount={selectedAccount}
         onDelete={handleDeleteAccount}
+      />
+      <AccountDemote
+        open={openAccountDemote}
+        handleClose={() => {
+          setOpenAccountDemote(false);
+          setSelectedAccount(null);
+        }}
+        selectedAccount={selectedAccount}
+        onConfirm={() =>
+          selectedAccount && handleDemoteAccount(selectedAccount)
+        }
       />
 
       {/* Snackbar Notification */}

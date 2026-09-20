@@ -41,7 +41,14 @@ export const fetchAccounts = async () => {
     handleError(error);
   }
 };
-
+export const demoteAccount = async (id) => {
+  try {
+    const res = await api.post(`/accounts/${id}/demote`);
+    return res.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
 // POST create new officer account
 export const addAccount = async (formData) => {
   try {
