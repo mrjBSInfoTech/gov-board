@@ -1,11 +1,7 @@
 const COMMON_AUTH_KEYS = ["auth_section"];
 
 // For admin part
-const ADMIN_AUTH_KEYS = [
-  "admin_token",
-  "admin_first_name",
-  "admin_last_name",
-];
+const ADMIN_AUTH_KEYS = ["admin_token", "admin_first_name", "admin_last_name"];
 
 // For student part
 const STUDENT_AUTH_KEYS = [
@@ -24,6 +20,7 @@ const OFFICER_AUTH_KEYS = [
   "officer_first_name",
   "officer_last_name",
   "officer_position",
+  "officer_section",
   "officer_email",
   "officer_phone_number",
 ];
@@ -138,7 +135,7 @@ export function getToken(section) {
  */
 export function removeToken(section) {
   if (!section || !TOKEN_KEYS[section]) return;
-  
+
   localStorage.removeItem(TOKEN_KEYS[section]);
   if (localStorage.getItem("auth_section") === section) {
     localStorage.removeItem("auth_section");

@@ -118,6 +118,7 @@ const Login = () => {
       localStorage.setItem("officer_officer_id", data.officer_id || "");
       localStorage.setItem("officer_student_number", data.student_number || "");
       localStorage.setItem("officer_position", data.position || "Officer");
+      localStorage.setItem("officer_section", data.section || "");
       localStorage.setItem("officer_first_name", data.first_name || "");
       localStorage.setItem("officer_last_name", data.last_name || "");
       localStorage.setItem("officer_role", data.role || "");

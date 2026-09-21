@@ -4,6 +4,31 @@ import { authenticateAdmin } from "../../middleware/adminAuthMiddleware.js";
 
 const router = express.Router();
 
+const resolveBatchId = async (connection, year, section) => {
+  const normalizedYear = String(year ?? "").trim();
+  const normalizedSection = String(section ?? "").trim();
+
+  if (!normalizedYear || !normalizedSection) {
+    return null;
+  }
+
+  const [existingRows] = await connection.query(
+    "SELECT batch_id FROM batch WHERE year_name = ? AND section_name = ? LIMIT 1",
+    [normalizedYear, normalizedSection],
+  );
+
+  if (existingRows && existingRows.length > 0) {
+    return existingRows[0].batch_id;
+  }
+
+  const [result] = await connection.query(
+    "INSERT INTO batch (year_name, section_name) VALUES (?, ?)",
+    [normalizedYear, normalizedSection],
+  );
+
+  return result.insertId;
+};
+
 const POSITION_OPTIONS = [
   "Mayor",
   "Vice-Mayor",
@@ -16,9 +41,11 @@ const POSITION_OPTIONS = [
 
 router.get("/", authenticateAdmin, (req, res) => {
   const sql = `
-    SELECT student_id, first_name, last_name, student_number, position, year, section, date_created
-    FROM student
-    ORDER BY date_created DESC`;
+    SELECT s.student_id, s.first_name, s.last_name, s.student_number, s.position,
+      b.year_name AS year, b.section_name AS section, s.date_created
+    FROM student s
+    LEFT JOIN batch b ON b.batch_id = s.batch_id
+    ORDER BY s.date_created DESC`;
 
   db.query(sql, (err, result) => {
     if (err) {
@@ -45,7 +72,11 @@ router.post("/:id/promote", authenticateAdmin, async (req, res) => {
   }
 
   try {
-    const studentSql = `SELECT * FROM student WHERE student_id = ? LIMIT 1`;
+    const studentSql = `
+      SELECT s.*, b.year_name AS year, b.section_name AS section
+      FROM student s
+      LEFT JOIN batch b ON b.batch_id = s.batch_id
+      WHERE s.student_id = ? LIMIT 1`;
     const [studentRows] = await db.promise().query(studentSql, [studentId]);
 
     if (!studentRows || studentRows.length === 0) {
@@ -54,9 +85,10 @@ router.post("/:id/promote", authenticateAdmin, async (req, res) => {
 
     const student = studentRows[0];
     const duplicateSql = `
-      SELECT *
+      SELECT o.*, b.year_name AS year, b.section_name AS section
       FROM officer o
-      WHERE o.section = ? AND o.position = ?
+      LEFT JOIN batch b ON b.batch_id = o.batch_id
+      WHERE b.section_name = ? AND o.position = ?
       LIMIT 1
     `;
 
@@ -83,13 +115,12 @@ router.post("/:id/promote", authenticateAdmin, async (req, res) => {
         admin_id,
         student_number,
         position,
-        year,
-        section,
+        batch_id,
         first_name,
         last_name,
         password,
         date_created
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
     `;
 
     const connection = db.promise();
@@ -107,11 +138,10 @@ router.post("/:id/promote", authenticateAdmin, async (req, res) => {
             last_name,
             student_number,
             position,
-            year,
-            section,
+            batch_id,
             password,
             date_created
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
         `;
 
         await connection.query(restoreStudentSql, [
@@ -121,8 +151,7 @@ router.post("/:id/promote", authenticateAdmin, async (req, res) => {
           previousHolder.last_name,
           previousHolder.student_number,
           null,
-          previousHolder.year,
-          previousHolder.section,
+          previousHolder.batch_id,
           previousHolder.password,
         ]);
 
@@ -131,12 +160,16 @@ router.post("/:id/promote", authenticateAdmin, async (req, res) => {
         ]);
       }
 
+      const batchId = await resolveBatchId(
+        connection,
+        student.year,
+        student.section,
+      );
       const [insertResult] = await connection.query(insertSql, [
         req.user?.admin_id || null,
         student.student_number,
         position,
-        student.year,
-        student.section,
+        batchId,
         student.first_name,
         student.last_name,
         student.password,

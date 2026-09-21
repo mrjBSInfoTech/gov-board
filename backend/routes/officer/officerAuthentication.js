@@ -21,10 +21,14 @@ router.post("/login", async (req, res) => {
   }
 
   const sql = `
-    SELECT o.officer_id, o.student_number, o.position, o.year, o.section, o.first_name, o.last_name, o.password,
+    SELECT o.officer_id, o.student_number, o.position,
+      b.year_name AS year,
+      b.section_name AS section,
+      o.first_name, o.last_name, o.password,
       r.role, r.can_add, r.can_edit, r.can_delete, r.can_moderate
     FROM officer o
     LEFT JOIN officer_role r ON o.officer_id = r.officer_id
+    LEFT JOIN batch b ON b.batch_id = o.batch_id
     WHERE o.student_number = ?
     LIMIT 1`;
 
@@ -54,11 +58,16 @@ router.post("/login", async (req, res) => {
         .json({ message: "Invalid student number or password" });
     }
 
+    const resolvedSection = officer.section || "";
+    const resolvedYear = officer.year || null;
+
     const token = jwt.sign(
       {
         officer_id: officer.officer_id,
         student_number: officer.student_number,
         role: officer.role,
+        section: resolvedSection,
+        year: resolvedYear,
       },
       process.env.JWT_SECRET,
       { expiresIn: "8h" },
@@ -69,8 +78,8 @@ router.post("/login", async (req, res) => {
       officer_id: officer.officer_id,
       student_number: officer.student_number,
       position: officer.position || "Officer",
-      year: officer.year,
-      section: officer.section,
+      year: resolvedYear,
+      section: resolvedSection,
       first_name: officer.first_name,
       last_name: officer.last_name,
       role: officer.role,

@@ -38,7 +38,7 @@ router.post("/register", (req, res) => {
         return res.status(500).json({ message: "Database error" });
       }
 
-      if (existing) {
+      if (existing.length > 0) {
         return res
           .status(409)
           .json({ message: "Student number already exists" });
@@ -46,36 +46,68 @@ router.post("/register", (req, res) => {
 
       const hashedPassword = bcrypt.hashSync(password, 10);
 
-      const sql = `
-      INSERT INTO student (first_name, last_name, student_number, position, year, section, password)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`;
-
+      const batchSql = `SELECT batch_id FROM batch WHERE year_name = ? AND section_name = ? LIMIT 1`;
       db.query(
-        sql,
-        [
-          first_name.trim(),
-          last_name.trim(),
-          student_number.trim(),
-          position ? position.trim() : null,
-          year.trim(),
-          section.trim(),
-          hashedPassword,
-        ],
-        (insertErr, result) => {
-          if (insertErr) {
-            if (insertErr.code === "ER_DUP_ENTRY") {
-              return res
-                .status(409)
-                .json({ message: "Student number already exists" });
-            }
-            console.error("DB error:", insertErr);
+        batchSql,
+        [year.trim(), section.trim()],
+        (batchErr, batchRows) => {
+          if (batchErr) {
+            console.error("DB error:", batchErr);
             return res.status(500).json({ message: "Database error" });
           }
 
-          res.status(201).json({
-            message: "Account created successfully",
-            student_id: result.insertId,
-          });
+          const batchId =
+            batchRows && batchRows.length > 0 ? batchRows[0].batch_id : null;
+          const insertStudent = (resolvedBatchId) => {
+            const sql = `
+          INSERT INTO student (first_name, last_name, student_number, position, batch_id, password)
+          VALUES (?, ?, ?, ?, ?, ?)`;
+
+            db.query(
+              sql,
+              [
+                first_name.trim(),
+                last_name.trim(),
+                student_number.trim(),
+                position ? position.trim() : null,
+                resolvedBatchId,
+                hashedPassword,
+              ],
+              (insertErr, result) => {
+                if (insertErr) {
+                  if (insertErr.code === "ER_DUP_ENTRY") {
+                    return res
+                      .status(409)
+                      .json({ message: "Student number already exists" });
+                  }
+                  console.error("DB error:", insertErr);
+                  return res.status(500).json({ message: "Database error" });
+                }
+
+                res.status(201).json({
+                  message: "Account created successfully",
+                  student_id: result.insertId,
+                });
+              },
+            );
+          };
+
+          if (batchId) {
+            insertStudent(batchId);
+            return;
+          }
+
+          db.query(
+            "INSERT INTO batch (year_name, section_name) VALUES (?, ?)",
+            [year.trim(), section.trim()],
+            (insertBatchErr, batchResult) => {
+              if (insertBatchErr) {
+                console.error("DB error:", insertBatchErr);
+                return res.status(500).json({ message: "Database error" });
+              }
+              insertStudent(batchResult.insertId);
+            },
+          );
         },
       );
     },
@@ -93,9 +125,11 @@ router.post("/login", (req, res) => {
   }
 
   const sql = `
-    SELECT student_id, first_name, last_name, student_number, position, year, section, password
-    FROM student
-    WHERE student_number = ?
+    SELECT s.student_id, s.first_name, s.last_name, s.student_number, s.position,
+      b.year_name AS year, b.section_name AS section, s.password
+    FROM student s
+    LEFT JOIN batch b ON b.batch_id = s.batch_id
+    WHERE s.student_number = ?
     LIMIT 1`;
 
   db.query(sql, [student_number.trim()], (err, results) => {
