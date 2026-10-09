@@ -1,14 +1,5 @@
 import React, { useState } from "react";
-import {
-  Card,
-  CardMedia,
-  CardContent,
-  Typography,
-  IconButton,
-  Box,
-  Tooltip,
-  Link as MuiLink,
-} from "@mui/material";
+import { Card, Typography, IconButton, Box, Tooltip, Link as MuiLink } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import LaunchIcon from "@mui/icons-material/Launch";
@@ -44,14 +35,14 @@ function AnnouncementCard({ announcement, onEdit, onDelete }) {
         display: "flex",
         flexDirection: "column",
         borderRadius: 4,
-        bgcolor: "#ffffff",
+        bgcolor: "background.paper",
         border: "1px solid",
-        borderColor: "grey.200",
-        boxShadow: "0 12px 24px -12px rgba(0,0,0,0.08)",
+        borderColor: "divider",
+        boxShadow: "0 10px 24px rgba(3, 10, 15, 0.18)",
         transition: "all 0.3s ease",
         "&:hover": {
           transform: "translateY(-6px)",
-          boxShadow: "0 16px 32px -12px rgba(0,0,0,0.15)",
+          boxShadow: "0 16px 32px rgba(3, 10, 15, 0.28)",
           borderColor: "primary.light",
         },
         position: "relative",
@@ -78,11 +69,15 @@ function AnnouncementCard({ announcement, onEdit, onDelete }) {
                     size="small"
                     onClick={() => onEdit(announcement)}
                     sx={{
-                      bgcolor: "grey.50",
+                      bgcolor: "action.hover",
                       color: "text.secondary",
                       border: "1px solid",
-                      borderColor: "grey.200",
-                      "&:hover": { bgcolor: "primary.50", color: "primary.main", borderColor: "primary.main" },
+                      borderColor: "divider",
+                      "&:hover": {
+                        bgcolor: "rgba(45, 212, 191, 0.12)",
+                        color: "primary.main",
+                        borderColor: "primary.main",
+                      },
                     }}
                   >
                     <EditIcon fontSize="small" />
@@ -95,10 +90,10 @@ function AnnouncementCard({ announcement, onEdit, onDelete }) {
                     size="small"
                     onClick={() => onDelete(announcement)}
                     sx={{
-                      bgcolor: "grey.50",
+                      bgcolor: "action.hover",
                       color: "text.secondary",
                       border: "1px solid",
-                      borderColor: "grey.200",
+                      borderColor: "divider",
                       "&:hover": { bgcolor: "error.50", color: "error.main", borderColor: "error.main" },
                     }}
                   >
@@ -112,15 +107,17 @@ function AnnouncementCard({ announcement, onEdit, onDelete }) {
 
         {/* Body */}
         <Typography
-          variant="body1"
+          component="p"
           sx={{
+            m: 0,
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",
-            color: "text.primary",
-            fontSize: "1.05rem",
-            lineHeight: 1.6,
+            color: "#edf7f7",
+            fontFamily: '"Avenir Next", "Segoe UI", sans-serif',
+            fontSize: "1rem",
+            lineHeight: 1.65,
             fontWeight: 500,
-            mb: imageUrl ? 3 : (announcement.link ? 2 : 0),
+            mb: imageUrl ? 3 : announcement.link ? 2 : 0,
           }}
         >
           {announcement.announcement_body}
@@ -144,7 +141,7 @@ function AnnouncementCard({ announcement, onEdit, onDelete }) {
               px: 3,
               py: 1,
               borderRadius: 8,
-              bgcolor: "primary.50",
+              bgcolor: "rgba(45, 212, 191, 0.12)",
               color: "primary.main",
               fontWeight: 600,
               fontSize: "0.875rem",
@@ -152,7 +149,7 @@ function AnnouncementCard({ announcement, onEdit, onDelete }) {
               transition: "all 0.2s",
               wordBreak: "break-all",
               "&:hover": {
-                bgcolor: "primary.100",
+                bgcolor: "rgba(45, 212, 191, 0.2)",
               }
             }}
           >
@@ -173,7 +170,7 @@ function AnnouncementCard({ announcement, onEdit, onDelete }) {
                 maxHeight: 480,
                 objectFit: "cover",
                 borderRadius: 3,
-                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                boxShadow: "0 4px 12px rgba(3, 10, 15, 0.18)",
               }}
             />
           </Box>

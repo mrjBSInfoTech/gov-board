@@ -3,12 +3,19 @@ import db from "../../database/db.js";
 import { authenticateOfficer } from "../../middleware/officerAuthMiddleware.js";
 
 const router = express.Router();
+const MODERATE_POSITIONS = new Set([
+  "mayor",
+  "vice-mayor",
+  "vice mayor",
+  "secretary",
+  "protocol officer",
+]);
 
 router.get("/same-section", authenticateOfficer, (req, res) => {
   const officerId = Number(req.user?.officer_id);
 
   const resolveSectionSql = `
-    SELECT b.year_name AS year, b.section_name AS section
+    SELECT b.year_name AS year, b.section_name AS section, o.position
     FROM student o
     LEFT JOIN batch b ON b.batch_id = o.batch_id
     WHERE o.student_id = ? AND o.role IS NOT NULL
@@ -19,6 +26,16 @@ router.get("/same-section", authenticateOfficer, (req, res) => {
     if (err) {
       console.error("Moderator section lookup error:", err);
       return res.status(500).json({ message: "Database error" });
+    }
+
+    const position = String(sectionRows?.[0]?.position || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\./g, "");
+    if (!MODERATE_POSITIONS.has(position)) {
+      return res.status(403).json({
+        message: "Only leadership and Protocol Officers can access moderation.",
+      });
     }
 
     const year = String(sectionRows?.[0]?.year || "").trim();

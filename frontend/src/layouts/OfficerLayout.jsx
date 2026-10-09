@@ -17,12 +17,20 @@ import { ThemeProvider, CssBaseline, useMediaQuery } from "@mui/material";
 import { adminLightTheme, adminDarkTheme } from "../theme/customTheme";
 import Nexus from "../assets/react.svg";
 import { clearAuthData } from "../../utils/auth";
+import {
+  GOVERNANCE_SECTIONS,
+  getGovernanceAccess,
+} from "../utils/governanceAccess";
 
 // Icons
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import CampaignIcon from "@mui/icons-material/Campaign";
 import GavelIcon from "@mui/icons-material/Gavel";
+import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
+import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
+import EventNoteIcon from "@mui/icons-material/EventNote";
+import HistoryIcon from "@mui/icons-material/History";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 
 const Transition = React.forwardRef(function Transition(props, ref) {
@@ -92,11 +100,35 @@ export default function OfficerLayout() {
     }, 150);
   };
 
+  const governanceAccess = getGovernanceAccess(position);
+  const governanceChildren = GOVERNANCE_SECTIONS.filter(({ key }) =>
+    governanceAccess.includes(key),
+  ).map(({ key, title }) => {
+    const icons = {
+      audit: <HistoryIcon />,
+      budget: <AccountBalanceIcon />,
+      funds: <AttachMoneyIcon />,
+      "event-handlers": <EventNoteIcon />,
+      moderate: <GavelIcon />,
+    };
+
+    return {
+      segment: key,
+      title,
+      icon: icons[key],
+    };
+  });
+
   const navigation = [
     { segment: "dashboard", title: "Dashboard", icon: <DashboardIcon /> },
     { segment: "account", title: "Account", icon: <AccountCircleIcon /> },
     { segment: "announcement", title: "Announcement", icon: <CampaignIcon /> },
-    { segment: "moderate", title: "Moderate", icon: <GavelIcon /> },
+    {
+      segment: "governance",
+      title: "Governance",
+      icon: <AccountBalanceIcon />,
+      children: governanceChildren,
+    },
   ];
 
   const branding = {

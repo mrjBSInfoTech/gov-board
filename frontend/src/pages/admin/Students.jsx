@@ -81,9 +81,21 @@ export default function Students() {
         <title>Students</title>
       </Helmet>
 
-      <Typography variant="h4" sx={{ fontWeight: "bold", mb: 2 }}>
-        Students
-      </Typography>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          flexDirection: { xs: "column", sm: "row" },
+          mb: 2,
+        }}
+      >
+        <Typography
+          variant="h4"
+          sx={{ fontWeight: "bold", fontSize: { xs: 24, sm: 32 } }}
+        >
+          Students
+        </Typography>
+      </Box>
 
       {errorMessage && (
         <Alert severity="error" sx={{ mb: 2 }}>

@@ -38,6 +38,7 @@ export default function RoomTabs({
   roomId,
   canManageMembers = false,
 }) {
+  const isAdminSession = Boolean(localStorage.getItem("admin_token"));
   const officerPosition = localStorage.getItem("officer_position")?.replace(
     "Vice Mayor",
     "Vice-Mayor",
@@ -53,7 +54,9 @@ export default function RoomTabs({
   ];
   const officerRank = officerRanks.indexOf(officerPosition);
   const isOfficerManager = Boolean(
-    localStorage.getItem("officer_token") && officerRank >= 0,
+    !isAdminSession &&
+      localStorage.getItem("officer_token") &&
+      officerRank >= 0,
   );
   const officerPositionOptions = isOfficerManager
     ? officerRanks.slice(officerRank + 1)

@@ -32,6 +32,7 @@ import OfficerDashboard from "../pages/officer/Dashboard";
 import OfficerAnnouncement from "../pages/officer/Announcement";
 import OfficerModerate from "../pages/officer/Moderate";
 import OfficerAccount from "../pages/officer/Account";
+import OfficerGovernanceSection from "../pages/officer/GovernanceSection";
 
 const theme = createTheme();
 
@@ -86,7 +87,18 @@ export default function AppRoutes() {
                 <Route path="dashboard" element={<OfficerDashboard />} />
                 <Route path="account" element={<OfficerAccount />} />
                 <Route path="announcement" element={<OfficerAnnouncement />} />
-                <Route path="moderate" element={<OfficerModerate />} />
+                <Route
+                  path="moderate"
+                  element={<Navigate to="governance/moderate" replace />}
+                />
+                <Route
+                  path="governance/:section"
+                  element={<OfficerGovernanceSection />}
+                />
+                <Route
+                  path="governance/moderate"
+                  element={<OfficerModerate />}
+                />
               </Route>
             </Route>
           </Route>

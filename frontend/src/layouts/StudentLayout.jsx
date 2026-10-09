@@ -1,321 +1,244 @@
-import React, { useState, useEffect } from "react";
+import * as React from "react";
+import { useEffect, useState } from "react";
+import { AppProvider } from "@toolpad/core";
+import { DashboardLayout as MuiDashboardLayout } from "@toolpad/core";
 import {
-  AppBar,
-  Toolbar,
-  Typography,
   Backdrop,
-  Slide,
   Box,
   Button,
-  IconButton,
   Dialog,
-  DialogTitle,
+  DialogActions,
   DialogContent,
   DialogContentText,
-  DialogActions,
-  Divider,
-  Menu,
-  MenuItem,
-  ListItemIcon,
+  DialogTitle,
+  IconButton,
+  Slide,
+  Stack,
+  ThemeProvider,
+  Typography,
+  Avatar,
+  CssBaseline,
 } from "@mui/material";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
-import Logout from "@mui/icons-material/Logout";
-import logo from "../assets/react.svg";
+import DashboardIcon from "@mui/icons-material/Dashboard";
+import CampaignIcon from "@mui/icons-material/Campaign";
+import ExitToAppIcon from "@mui/icons-material/ExitToApp";
+import { adminDarkTheme } from "../theme/customTheme";
+import Nexus from "../assets/react.svg";
 import { logoutUser } from "../api/student/studentAuthenticationAPI";
-import { hasValidToken, clearAuthData } from "../../utils/auth";
+import { clearAuthData } from "../../utils/auth";
 
-// Animation transition
 const Transition = React.forwardRef(function Transition(props, ref) {
-  return (
-    <Slide
-      direction="up"
-      ref={ref}
-      {...props}
-      timeout={500}
-      easing={{
-        enter: "cubic-bezier(0.4, 0, 0.2, 1)",
-        exit: "ease-out",
-      }}
-    />
-  );
+  return <Slide direction="up" ref={ref} {...props} />;
 });
 
-function StudentLayout({ children }) {
+export default function StudentLayout() {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Student Info
-  const [studentNumber, setStudentNumber] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [middleName, setMiddleName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
-
-  const [loggedIn, setLoggedIn] = useState(false);
-  const [anchorEl, setAnchorEl] = useState(null);
-  const [openDialog, setOpenDialog] = useState(false);
-
-  const handleOpenDialog = () => {
-    handleClose();
-    setOpenDialog(true);
-  };
-  const handleCloseDialog = () => setOpenDialog(false);
-
   useEffect(() => {
     const loadStudentProfile = () => {
-      const token = localStorage.getItem("student_token");
-      const isValid = Boolean(token && hasValidToken(token));
-      setLoggedIn(isValid);
-
-      const storedStudentNumber = localStorage.getItem("student_student_number");
-      const storedFirstName = localStorage.getItem("student_first_name");
-      const storedMiddleName = localStorage.getItem("student_middle_name");
-      const storedLastName = localStorage.getItem("student_last_name");
-      const storedEmail = localStorage.getItem("student_email");
-      const storedPhoneNumber = localStorage.getItem("student_phone_number");
-
-      setStudentNumber(storedStudentNumber || "");
-      setFirstName(storedFirstName || "");
-      setMiddleName(storedMiddleName || "");
-      setLastName(storedLastName || "");
-      setEmail(storedEmail || "");
-      setPhoneNumber(storedPhoneNumber || "");
+      setFirstName(localStorage.getItem("student_first_name") || "");
+      setLastName(localStorage.getItem("student_last_name") || "");
     };
 
     loadStudentProfile();
     window.addEventListener("storage", loadStudentProfile);
+    return () => window.removeEventListener("storage", loadStudentProfile);
+  }, []);
 
-    return () => {
-      window.removeEventListener("storage", loadStudentProfile);
-    };
-  }, [location.pathname]);
-
-  const handleLogout = async () => {
-    if (logoutUser) {
-      logoutUser();
-    }
+  const handleLogout = () => {
+    logoutUser();
     clearAuthData("student");
-    setLoggedIn(false);
-    handleCloseDialog();
+    setOpen(false);
     navigate("/student/login", { replace: true });
-
-    // Clear browser history for extra security
-    window.history.pushState(null, null, window.location.href);
-    window.onpopstate = function () {
-      window.history.pushState(null, null, window.location.href);
-    };
   };
 
-  const open = Boolean(anchorEl);
-
-  // Open account popover
-  const handleClick = (event) => {
-    setAnchorEl(event.currentTarget);
+  const router = {
+    pathname: location.pathname.replace(/^\/student/, "") || "/",
+    navigate: (path) => {
+      navigate(`/student/${path.replace(/^\/+/, "")}`);
+    },
   };
 
-  // Close account popover
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
+  const navigation = [
+    { segment: "home", title: "Dashboard", icon: <DashboardIcon /> },
+    {
+      segment: "announcement",
+      title: "Announcements",
+      icon: <CampaignIcon />,
+    },
+  ];
 
-  const displayName =
-    [firstName, lastName].filter(Boolean).join(" ") || "Student";
-
-  return (
-    <>
-      <AppBar
-        position="sticky"
+  const branding = {
+    logo: (
+      <Box
         sx={{
-          backgroundColor: "#374151",
-          padding: { xs: "4px 10px", lg: "8px 20px" },
+          width: 40,
+          height: 40,
+          borderRadius: 2.5,
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "rgba(45, 212, 191, 0.14)",
+          border: "1px solid rgba(94, 234, 212, 0.35)",
         }}
-        elevation={0}
       >
-        <Toolbar
+        <img src={Nexus} alt="logo" style={{ width: 30, height: 30 }} />
+      </Box>
+    ),
+    title: (
+      <Typography sx={{ color: "#fff", fontWeight: "bold", fontSize: 23 }}>
+        GovBoard
+      </Typography>
+    ),
+    homeUrl: "/student/home",
+  };
+
+  const SidebarFooter = ({ mini }) => (
+    <Stack
+      direction="row"
+      alignItems="center"
+      justifyContent={mini ? "center" : "space-between"}
+      spacing={mini ? 0 : 1.5}
+      sx={{
+        p: 1.75,
+        borderTop: "1px solid rgba(148, 163, 184, 0.2)",
+        backgroundColor: "rgba(13, 23, 31, 0.45)",
+        mt: "auto",
+      }}
+    >
+      <Stack direction="row" spacing={1.5} alignItems="center">
+        <Avatar
           sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
+            width: 42,
+            height: 42,
+            border: "2px solid rgba(94, 234, 212, 0.7)",
+            backgroundColor: "#344452",
           }}
         >
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 2,
-              flexShrink: 0,
-            }}
-          >
-            <Box
-              sx={{
-                width: { xs: 42, sm: 50 },
-                height: { xs: 42, sm: 50 },
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                overflow: "hidden",
-                cursor: "pointer",
-              }}
-              onClick={() => {
-                navigate("/student/home");
-              }}
-            >
-              <img
-                src={logo}
-                alt="logo"
-                style={{
-                  width: "70%",
-                  height: "70%",
-                  objectFit: "cover",
-                  display: "block",
-                }}
-              />
-            </Box>
-
-            <Typography
-              variant="h6"
-              sx={{
-                fontWeight: "bold",
-                color: "#fff",
-              }}
-            >
-              GovBoard
+          {`${firstName[0] || ""}${lastName[0] || ""}`}
+        </Avatar>
+        {!mini && (
+          <Stack>
+            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+              {`${firstName} ${lastName}`.trim() || "Student"}
             </Typography>
-          </Box>
+            <Typography variant="caption" sx={{ color: "#a9b9bf" }}>
+              Student
+            </Typography>
+          </Stack>
+        )}
+      </Stack>
 
-          <Box sx={{ display: { xs: "none", md: "flex" }, alignItems: "center", gap: 2, flexGrow: 1, ml: 4 }}>
-            <Button 
-              color="inherit" 
-              onClick={() => navigate("/student/home")}
-              sx={{ opacity: location.pathname === "/student/home" ? 1 : 0.7 }}
-            >
-              Home
+      {!mini && (
+        <IconButton
+          size="small"
+          onClick={() => setOpen(true)}
+          aria-label="Log out"
+          sx={{
+            color: "#a9b9bf",
+            border: "1px solid rgba(148, 163, 184, 0.24)",
+            borderRadius: 1.5,
+          }}
+        >
+          <ExitToAppIcon fontSize="small" />
+        </IconButton>
+      )}
+    </Stack>
+  );
+
+  return (
+    <ThemeProvider theme={adminDarkTheme}>
+      <CssBaseline />
+      <AppProvider
+        navigation={navigation}
+        router={router}
+        branding={branding}
+        session={{
+          user: {
+            name: `${firstName} ${lastName}`.trim() || "Student",
+            role: "Student",
+          },
+        }}
+        theme={adminDarkTheme}
+        disableCollapsibleSidebar
+      >
+        <Dialog
+          open={open}
+          onClose={() => setOpen(false)}
+          TransitionComponent={Transition}
+          keepMounted
+          slots={{ backdrop: Backdrop }}
+        >
+          <DialogTitle sx={{ fontWeight: "bold" }}>Log out</DialogTitle>
+          <DialogContent>
+            <DialogContentText>Are you sure you want to log out?</DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpen(false)} color="secondary">
+              Cancel
             </Button>
-            <Button 
-              color="inherit" 
-              onClick={() => navigate("/student/announcement")}
-              sx={{ opacity: location.pathname === "/student/announcement" ? 1 : 0.7 }}
-            >
-              Announcements
+            <Button onClick={handleLogout} variant="contained" color="primary">
+              Logout
             </Button>
+          </DialogActions>
+        </Dialog>
+
+        <MuiDashboardLayout
+          slots={{ sidebarFooter: SidebarFooter }}
+          sx={{
+            backgroundColor: adminDarkTheme.palette.background.default,
+            "& .MuiDrawer-paper": {
+              backgroundColor: adminDarkTheme.palette.background.sidebar,
+              color: adminDarkTheme.palette.text.sidebar,
+              borderRight: "1px solid rgba(148, 163, 184, 0.13)",
+              borderTop: `3px solid ${adminDarkTheme.palette.primary.light}`,
+              boxShadow: "8px 0 30px rgba(3, 10, 15, 0.18)",
+            },
+            "& .MuiAppBar-root": {
+              backgroundColor: adminDarkTheme.palette.background.header,
+              borderBottom: "1px solid rgba(148, 163, 184, 0.16)",
+              boxShadow: "0 8px 24px rgba(3, 10, 15, 0.16)",
+            },
+            "& .MuiDrawer-paper .MuiListItemText-primary": {
+              color: "#e5e7eb",
+              fontSize: "0.9rem",
+              fontWeight: 600,
+            },
+            "& .MuiDrawer-paper .MuiSvgIcon-root": { color: "#9ca3af" },
+            "& .MuiDrawer-paper .Mui-selected .MuiListItemText-primary": {
+              color: "#fff",
+              fontWeight: 700,
+            },
+            "& .MuiDrawer-paper .Mui-selected .MuiSvgIcon-root": {
+              color: "#fff",
+            },
+            "& .MuiListItemButton-root:hover": {
+              backgroundColor: "rgba(45, 212, 191, 0.12)",
+            },
+            "& .Mui-selected": {
+              backgroundColor: "rgba(45, 212, 191, 0.18) !important",
+              borderLeft: "3px solid #2dd4bf",
+            },
+            "& .MuiListItemButton-root": {
+              marginTop: "3px",
+              marginBottom: "3px",
+              minHeight: 46,
+              borderRadius: "0 8px 8px 0",
+            },
+            "& .MuiToolbar-root": { minHeight: 72 },
+          }}
+        >
+          <Box sx={{ pb: 2.5 }}>
+            <Outlet />
           </Box>
-
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              flexShrink: 0,
-            }}
-          >
-            <IconButton
-              sx={{ color: "white" }}
-              onClick={(e) => {
-                if (loggedIn) {
-                  handleClick(e);
-                } else {
-                  navigate("/student/login");
-                }
-              }}
-            >
-              <AccountCircleIcon fontSize="large" />
-            </IconButton>
-
-            <Menu
-              anchorEl={anchorEl}
-              id="account-menu"
-              open={open}
-              onClose={handleClose}
-              onClick={handleClose}
-              slotProps={{
-                paper: {
-                  elevation: 0,
-                  sx: {
-                    overflow: "visible",
-                    filter: "drop-shadow(0px 2px 8px rgba(0,0,0,0.32))",
-                    mt: 1.5,
-                    "& .MuiAvatar-root": {
-                      width: 32,
-                      height: 32,
-                      ml: -0.5,
-                      mr: 1,
-                    },
-                    "&::before": {
-                      content: '""',
-                      display: "block",
-                      position: "absolute",
-                      top: 0,
-                      right: 14,
-                      width: 10,
-                      height: 10,
-                      bgcolor: "background.paper",
-                      transform: "translateY(-50%) rotate(45deg)",
-                      zIndex: 0,
-                    },
-                  },
-                },
-              }}
-              transformOrigin={{ horizontal: "right", vertical: "top" }}
-              anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
-            >
-              <MenuItem disabled sx={{ opacity: "1 !important" }}>
-                <ListItemIcon>
-                  <AccountCircleIcon fontSize="small" />
-                </ListItemIcon>
-                <Typography
-                  variant="body2"
-                  sx={{ fontWeight: 600, color: "text.primary" }}
-                >
-                  {displayName}
-                </Typography>
-              </MenuItem>
-              <Divider />
-              <MenuItem onClick={handleOpenDialog}>
-                <ListItemIcon>
-                  <Logout fontSize="small" />
-                </ListItemIcon>
-                Logout
-              </MenuItem>
-            </Menu>
-          </Box>
-
-          <Dialog
-            open={openDialog}
-            onClose={handleCloseDialog}
-            TransitionComponent={Transition}
-            keepMounted
-            slots={{ backdrop: Backdrop }}
-            slotProps={{
-              backdrop: {
-                timeout: 500,
-              },
-            }}
-          >
-            <DialogTitle>Log out</DialogTitle>
-            <DialogContent>
-              <DialogContentText>
-                Are you sure you want to log out?
-              </DialogContentText>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={handleCloseDialog} color="primary">
-                Cancel
-              </Button>
-              <Button
-                onClick={handleLogout}
-                variant="contained"
-                color="primary"
-              >
-                Logout
-              </Button>
-            </DialogActions>
-          </Dialog>
-        </Toolbar>
-      </AppBar>
-      {children || <Outlet />}
-    </>
+        </MuiDashboardLayout>
+      </AppProvider>
+    </ThemeProvider>
   );
 }
-
-export default StudentLayout;

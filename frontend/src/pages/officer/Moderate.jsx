@@ -13,8 +13,11 @@ import {
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import PeopleCardList from "../../components/common/PeopleCardList";
+import { Navigate } from "react-router-dom";
+import { canAccessGovernanceSection } from "../../utils/governanceAccess";
 
 export default function Moderate() {
+  const position = localStorage.getItem("officer_position");
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -22,6 +25,8 @@ export default function Moderate() {
   const [selectedType, setSelectedType] = useState("All");
 
   useEffect(() => {
+    if (!canAccessGovernanceSection(position, "moderate")) return;
+
     const loadMembers = async () => {
       try {
         const token = localStorage.getItem("officer_token");
@@ -52,7 +57,7 @@ export default function Moderate() {
     };
 
     loadMembers();
-  }, []);
+  }, [position]);
 
   const memberTypeOptions = useMemo(() => {
     const options = new Set(members.map((member) => member.member_type));
@@ -71,6 +76,10 @@ export default function Moderate() {
       return matchesType && matchesSearch;
     });
   }, [members, searchTerm, selectedType]);
+
+  if (!canAccessGovernanceSection(position, "moderate")) {
+    return <Navigate to="/officer/dashboard" replace />;
+  }
 
   return (
     <Box sx={{ p: 3 }}>

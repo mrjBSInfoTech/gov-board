@@ -5,7 +5,7 @@ import {
   Box,
   Button,
   CircularProgress,
-  Grid,
+  InputAdornment,
   Paper,
   TextField,
   Typography,
@@ -13,8 +13,7 @@ import {
   Slide,
 } from "@mui/material";
 import CampaignIcon from "@mui/icons-material/Campaign";
-import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
-import LogoutIcon from "@mui/icons-material/Logout";
+import SearchIcon from "@mui/icons-material/Search";
 import AnnouncementCard from "../../components/officer/Announcement/AnnouncementCard";
 import RoomTabs from "../../components/room/RoomTabs";
 import {
@@ -48,6 +47,7 @@ export default function AnnouncementPage() {
   });
   const [roomCodeInput, setRoomCodeInput] = useState("");
   const [roomLoading, setRoomLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Snackbar notification
   const [snackbar, setSnackbar] = useState({
@@ -137,8 +137,17 @@ export default function AnnouncementPage() {
     setRoomCodeInput("");
   };
 
+  const filteredAnnouncements = announcements.filter((announcement) => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return true;
+    return (
+      announcement.announcement_body?.toLowerCase().includes(term) ||
+      announcement.link?.toLowerCase().includes(term)
+    );
+  });
+
   return (
-    <Box sx={{ p: 3, maxWidth: 1200, mx: "auto" }}>
+    <Box sx={{ p: { xs: 2, md: 3 } }}>
       <Helmet titleTemplate="%s - GovBoard">
         <title>Announcements</title>
       </Helmet>
@@ -149,26 +158,31 @@ export default function AnnouncementPage() {
           display: "flex",
           flexDirection: { xs: "column", sm: "row" },
           justifyContent: "space-between",
-          alignItems: { xs: "stretch", sm: "center" },
-          mb: 4,
+          alignItems: { xs: "flex-start", sm: "center" },
+          mb: 3,
           gap: 2,
         }}
       >
-        <Typography
-          variant="h4"
-          sx={{ fontWeight: "bold", fontSize: { xs: 24, sm: 32 } }}
-        >
-          {joinedRoom
-            ? `${joinedRoom.room_name} Announcements`
-            : "Announcements"}
-        </Typography>
+        <Box>
+          <Typography
+            variant="h4"
+            sx={{ fontWeight: "bold", fontSize: { xs: 24, sm: 32 } }}
+          >
+            Announcements {joinedRoom && `- ${joinedRoom.room_name}`}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {joinedRoom
+              ? `Viewing announcements for room ${joinedRoom.room_number}`
+              : "Join a room to view announcements"}
+          </Typography>
+        </Box>
 
         {joinedRoom && (
           <Button
             variant="outlined"
             color="error"
-            startIcon={<LogoutIcon />}
             onClick={handleLeaveRoom}
+            sx={{ borderRadius: 2, fontWeight: "bold" }}
           >
             Leave Room
           </Button>
@@ -177,89 +191,135 @@ export default function AnnouncementPage() {
 
       {/* Main Content Area */}
       {!joinedRoom ? (
-        // JOIN ROOM UI
-        <Box sx={{ display: "flex", justifyContent: "center", mt: 8 }}>
+        <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
           <Paper
             elevation={0}
             sx={{
-              p: 5,
+              p: 4,
+              mb: 3,
               width: "100%",
-              maxWidth: 480,
-              textAlign: "center",
-              borderRadius: 4,
+              maxWidth: 500,
+              borderRadius: 3,
               border: "1px solid",
-              borderColor: "grey.200",
-              boxShadow: "0 12px 24px -12px rgba(0,0,0,0.08)",
+              borderColor: "divider",
+              bgcolor: "background.paper",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
             }}
           >
-            <MeetingRoomIcon
-              sx={{ fontSize: 64, color: "primary.main", mb: 2 }}
-            />
-            <Typography variant="h5" fontWeight="bold" gutterBottom>
+            <CampaignIcon sx={{ fontSize: 48, color: "primary.main", mb: 2 }} />
+            <Typography variant="h6" sx={{ mb: 1, fontWeight: "bold" }}>
               Join a Room
             </Typography>
-            <Typography color="text.secondary" sx={{ mb: 4 }}>
-              Enter the room code provided by your officer to view
-              announcements.
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mb: 3, textAlign: "center" }}
+            >
+              Enter a room code to view its announcements.
             </Typography>
+            {error && (
+              <Alert severity="error" sx={{ width: "100%", mb: 2 }}>
+                {error}
+              </Alert>
+            )}
 
-            <form onSubmit={handleJoinRoom}>
+            <Box
+              component="form"
+              onSubmit={handleJoinRoom}
+              sx={{ width: "100%", display: "flex", gap: 2 }}
+            >
               <TextField
                 fullWidth
-                variant="outlined"
-                label="Room Code"
-                placeholder="e.g. abc-1x2y"
+                placeholder="Enter Room Code (e.g. bly-ogts)"
                 value={roomCodeInput}
                 onChange={(e) => setRoomCodeInput(e.target.value)}
-                sx={{ mb: 3 }}
-                error={!!error}
-                helperText={error}
+                disabled={roomLoading}
+                size="small"
               />
               <Button
                 type="submit"
                 variant="contained"
-                size="large"
-                fullWidth
                 disabled={!roomCodeInput.trim() || roomLoading}
-                sx={{ py: 1.5, borderRadius: 2 }}
+                sx={{ px: 3, fontWeight: "bold", whiteSpace: "nowrap" }}
               >
-                {roomLoading ? (
-                  <CircularProgress size={26} color="inherit" />
-                ) : (
-                  "Join Room"
-                )}
+                {roomLoading ? "Joining..." : "Join"}
               </Button>
-            </form>
+            </Box>
           </Paper>
         </Box>
       ) : (
         <>
-          <RoomTabs announcements={announcements} roomId={joinedRoom.room_id} />
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2,
+              mb: 3,
+              borderRadius: 3,
+              border: "1px solid",
+              borderColor: "divider",
+              bgcolor: "background.paper",
+            }}
+          >
+            <TextField
+              fullWidth
+              placeholder="Search announcements..."
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon color="action" />
+                  </InputAdornment>
+                ),
+              }}
+              size="small"
+            />
+          </Paper>
+
+          <Box sx={{ mb: 3 }}>
+            <RoomTabs
+              announcements={announcements}
+              roomId={joinedRoom.room_id}
+            />
+          </Box>
+
+          {error && (
+            <Alert severity="error" sx={{ mb: 3 }}>
+              {error}
+            </Alert>
+          )}
 
           {/* Announcements feed */}
           {loading ? (
             <Box sx={{ display: "flex", justifyContent: "center", my: 10 }}>
               <CircularProgress />
             </Box>
-          ) : announcements.length === 0 ? (
+          ) : filteredAnnouncements.length === 0 ? (
             <Paper
               elevation={0}
               sx={{
                 p: 6,
                 textAlign: "center",
                 borderRadius: 3,
-                border: "1px dashed rgba(0, 0, 0, 0.15)",
-                bgcolor: "grey.50",
+                border: "1px dashed",
+                borderColor: "divider",
+                bgcolor: "background.paper",
               }}
             >
               <CampaignIcon
                 sx={{ fontSize: 64, color: "text.disabled", mb: 2 }}
               />
               <Typography variant="h6" color="text.secondary" gutterBottom>
-                No announcements in this room
+                {searchTerm
+                  ? "No announcements found matching your search"
+                  : "No announcements in this room"}
               </Typography>
               <Typography variant="body2" color="text.disabled">
-                When the officer posts an announcement, it will appear here.
+                {searchTerm
+                  ? "Try adjusting your search query."
+                  : "When an officer posts an announcement, it will appear here."}
               </Typography>
             </Paper>
           ) : (
@@ -272,7 +332,7 @@ export default function AnnouncementPage() {
                 gap: 3,
               }}
             >
-              {announcements.map((announcement) => (
+              {filteredAnnouncements.map((announcement) => (
                 <Box
                   key={announcement.announcement_id}
                   sx={{ width: "100%", maxWidth: 600 }}
