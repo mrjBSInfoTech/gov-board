@@ -24,16 +24,38 @@ router.get("/room/validate/:roomNumber", authenticateStudent, (req, res) => {
       return res.status(404).json({ error: "Invalid room code" });
     }
 
-    const studentId = req.user.student_id || req.user.id || req.user.admin_id;
+    const studentId = req.user.student_id;
+    if (!studentId) {
+      return res.status(403).json({ error: "Unable to identify student" });
+    }
+
     db.query(
-      "UPDATE student SET room_id = ? WHERE student_id = ?",
-      [results[0].room_id, studentId],
-      (updateErr) => {
-        if (updateErr) {
-          console.error("Room membership update error:", updateErr);
+      "SELECT student_id FROM student WHERE student_id = ? LIMIT 1",
+      [studentId],
+      (lookupErr, studentRows) => {
+        if (lookupErr) {
+          console.error("Student lookup error:", lookupErr);
           return res.status(500).json({ error: "Unable to join room" });
         }
-        res.json(results[0]);
+
+        if (studentRows.length === 0) {
+          return res.status(404).json({ error: "Student account not found" });
+        }
+
+        db.query(
+          `INSERT INTO room_member (room_id, member_type, member_id)
+           VALUES (?, 'student', ?)
+           ON DUPLICATE KEY UPDATE member_id = VALUES(member_id)`,
+          [results[0].room_id, studentId],
+          (updateErr) => {
+             if (updateErr) {
+               console.error("Room membership update error:", updateErr);
+               return res.status(500).json({ error: "Unable to join room" });
+             }
+
+             res.json(results[0]);
+          },
+        );
       },
     );
   });

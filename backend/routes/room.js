@@ -24,40 +24,20 @@ const authenticateRoomUser = (req, res, next) => {
 };
 
 router.get("/:roomId/members", authenticateRoomUser, (req, res) => {
-  const officerId = req.user.officer_id || 0;
-  const adminId = req.user.admin_id || 0;
   db.query(
-    `SELECT o.officer_id AS member_id, o.first_name, o.last_name, o.position, b.section_name AS section, 'officer' AS member_type
-     FROM officer o
-     LEFT JOIN batch b ON b.batch_id = o.batch_id
-     WHERE o.officer_id = ? OR (o.admin_id = ? AND ? > 0)
-     UNION ALL
-    SELECT admin_id AS member_id, first_name, last_name, role AS position, NULL AS section, 'admin' AS member_type
-    FROM admin
-     WHERE (admin_id = ? AND ? > 0)
-       OR (admin_id IN (SELECT admin_id FROM officer WHERE officer_id = ?) AND ? > 0)
-    UNION ALL
-     SELECT s.student_id AS member_id, s.first_name, s.last_name, s.position, b.section_name AS section, 'student' AS member_type
-     FROM student s
+    `SELECT rm.member_id, s.first_name, s.last_name, s.position, b.section_name AS section, rm.member_type
+    FROM room_member rm
+    INNER JOIN student s ON s.student_id = rm.member_id
      LEFT JOIN batch b ON b.batch_id = s.batch_id
-     WHERE s.room_id = ?
-        OR (s.officer_id = ? AND ? > 0)
-        OR (s.officer_id IN (SELECT officer_id FROM officer WHERE admin_id = ?) AND ? > 0)
+     WHERE rm.room_id = ? AND rm.member_type = 'student'
+     UNION ALL
+     SELECT rm.member_id, o.first_name, o.last_name, o.position, b.section_name AS section, rm.member_type
+     FROM room_member rm
+     INNER JOIN officer o ON o.officer_id = rm.member_id
+     LEFT JOIN batch b ON b.batch_id = o.batch_id
+     WHERE rm.room_id = ? AND rm.member_type = 'officer'
      ORDER BY first_name ASC, last_name ASC`,
-    [
-      officerId,
-      adminId,
-      adminId,
-      adminId,
-      adminId,
-      officerId,
-      officerId,
-      req.params.roomId,
-      officerId,
-      officerId,
-      adminId,
-      adminId,
-    ],
+    [req.params.roomId, req.params.roomId],
     (err, results) => {
       if (err) {
         console.error("Room member read error:", err);

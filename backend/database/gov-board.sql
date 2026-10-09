@@ -162,6 +162,15 @@ CREATE TABLE `room_message` (
   `date_created` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- Explicit membership records; only these records make a person a room member.
+CREATE TABLE `room_member` (
+  `room_member_id` int(11) NOT NULL,
+  `room_id` int(11) NOT NULL,
+  `member_type` enum('officer','student') NOT NULL,
+  `member_id` int(11) NOT NULL,
+  `date_joined` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 -- --------------------------------------------------------
 
 --
@@ -188,6 +197,12 @@ CREATE TABLE `student` (
 INSERT INTO `student` (`student_id`, `officer_id`, `room_id`, `first_name`, `last_name`, `student_number`, `position`, `batch_id`, `password`, `date_created`) VALUES
 (4, NULL, NULL, 'Jake', 'Doe', '1000000000', NULL, 1, '$2b$10$70ad/kVr/tcGhcNtMCSk9eALW2w0J8iI3BUytDuO1Mqq0Frqzo5Se', '2026-09-20 22:03:55'),
 (5, NULL, NULL, 'Joy', 'Doe', '2000000000', NULL, 1, '$2b$10$70ad/kVr/tcGhcNtMCSk9eALW2w0J8iI3BUytDuO1Mqq0Frqzo5Se', '2026-09-20 22:08:42');
+
+-- Preserve memberships from older dumps that used student.room_id.
+INSERT INTO `room_member` (`room_id`, `member_type`, `member_id`)
+SELECT `room_id`, 'student', `student_id`
+FROM `student`
+WHERE `room_id` IS NOT NULL;
 
 --
 -- Indexes for dumped tables
@@ -241,6 +256,12 @@ ALTER TABLE `room`
 ALTER TABLE `room_message`
   ADD PRIMARY KEY (`message_id`),
   ADD KEY `room_id` (`room_id`);
+
+-- Indexes for table `room_member`
+ALTER TABLE `room_member`
+  ADD PRIMARY KEY (`room_member_id`),
+  ADD UNIQUE KEY `uq_room_member` (`room_id`,`member_type`,`member_id`),
+  ADD KEY `idx_room_member_room` (`room_id`);
 
 --
 -- Indexes for table `student`
@@ -298,6 +319,10 @@ ALTER TABLE `room`
 ALTER TABLE `room_message`
   MODIFY `message_id` int(11) NOT NULL AUTO_INCREMENT;
 
+-- AUTO_INCREMENT for table `room_member`
+ALTER TABLE `room_member`
+  MODIFY `room_member_id` int(11) NOT NULL AUTO_INCREMENT;
+
 --
 -- AUTO_INCREMENT for table `student`
 --
@@ -332,6 +357,10 @@ ALTER TABLE `officer_role`
 --
 ALTER TABLE `room_message`
   ADD CONSTRAINT `room_message_room_fk` FOREIGN KEY (`room_id`) REFERENCES `room` (`room_id`) ON DELETE CASCADE;
+
+-- Constraints for table `room_member`
+ALTER TABLE `room_member`
+  ADD CONSTRAINT `room_member_room_fk` FOREIGN KEY (`room_id`) REFERENCES `room` (`room_id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `student`

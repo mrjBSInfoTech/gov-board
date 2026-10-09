@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   fetchRoomMembers,
   fetchRoomMessages,
@@ -37,6 +37,16 @@ export default function RoomTabs({ announcements, roomId }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
 
+  const loadMembers = useCallback(() => {
+    if (!roomId) return;
+
+    setLoadingMembers(true);
+    fetchRoomMembers(roomId)
+      .then(setMembers)
+      .catch((err) => setError(err.message))
+      .finally(() => setLoadingMembers(false));
+  }, [roomId]);
+
   useEffect(() => {
     if (!roomId) return;
 
@@ -46,12 +56,8 @@ export default function RoomTabs({ announcements, roomId }) {
       .catch((err) => setError(err.message))
       .finally(() => setLoadingMessages(false));
 
-    setLoadingMembers(true);
-    fetchRoomMembers(roomId)
-      .then(setMembers)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoadingMembers(false));
-  }, [roomId]);
+    loadMembers();
+  }, [loadMembers, roomId]);
 
   const files = useMemo(
     () =>
@@ -113,7 +119,10 @@ export default function RoomTabs({ announcements, roomId }) {
           setTab(0);
           setChatFilesOpen(true);
         }}
-        onOpenMembers={() => setMembersOpen(true)}
+        onOpenMembers={() => {
+          loadMembers();
+          setMembersOpen(true);
+        }}
       />
 
       <RoomChatFilesDialog

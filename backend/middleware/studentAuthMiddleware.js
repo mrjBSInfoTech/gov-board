@@ -21,12 +21,12 @@ export const authenticateStudent = (req, res, next) => {
         return res.status(403).json({ message: "Invalid or expired token." });
       }
 
-      const adminId = user.admin_id || user.id;
-      if (!adminId) {
-        return res.status(403).json({ message: "Unable to identify admin." });
+      const studentId = user.student_id || user.id;
+      if (!studentId) {
+        return res.status(403).json({ message: "Unable to identify student." });
       }
 
-      req.user = { ...user, admin_id: adminId };
+      req.user = { ...user, student_id: studentId };
       next();
     },
   );
