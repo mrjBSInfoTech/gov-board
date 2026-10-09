@@ -27,7 +27,10 @@ import {
   Visibility,
   VisibilityOff,
 } from "@mui/icons-material";
-import { loginUser } from "../../api/student/studentAuthenticationAPI";
+import {
+  loginUser,
+  refreshSession,
+} from "../../api/student/studentAuthenticationAPI";
 import Icon from "../../assets/react.svg";
 import { hasValidToken, setToken } from "../../../utils/auth";
 
@@ -48,10 +51,35 @@ const Login = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   useEffect(() => {
-    const studentToken = localStorage.getItem("student_token");
-    if (studentToken && hasValidToken(studentToken)) {
-      navigate("/student/home", { replace: true });
-    }
+    const existingToken =
+      localStorage.getItem("officer_token") ||
+      localStorage.getItem("student_token");
+    if (!existingToken || !hasValidToken(existingToken)) return;
+
+    refreshSession(existingToken)
+      .then((data) => {
+        const authType = data.is_officer ? "officer" : "student";
+        localStorage.removeItem("student_token");
+        localStorage.removeItem("officer_token");
+        setToken(authType, data.token);
+        localStorage.setItem(`${authType}_student_id`, data.student_id || "");
+        localStorage.setItem(`${authType}_student_number`, data.student_number || "");
+        localStorage.setItem(`${authType}_first_name`, data.first_name || "");
+        localStorage.setItem(`${authType}_last_name`, data.last_name || "");
+
+        if (data.is_officer) {
+          localStorage.setItem("officer_officer_id", data.officer_id || "");
+          localStorage.setItem("officer_position", data.position || "Officer");
+        }
+
+        navigate(data.is_officer ? "/officer/dashboard" : "/student/home", {
+          replace: true,
+        });
+      })
+      .catch(() => {
+        localStorage.removeItem("officer_token");
+        localStorage.removeItem("student_token");
+      });
   }, [navigate]);
 
 
@@ -100,8 +128,6 @@ const Login = () => {
       navigate("/student/login");
     } else if (selectedModule === "Admin") {
       navigate("/admin/login");
-    } else if (selectedModule === "Officer") {
-      navigate("/officer/login");
     }
   };
 
@@ -114,15 +140,47 @@ const Login = () => {
     try {
       const data = await loginUser({ student_number: studentNumber, password });
 
-      setToken("student", data.token);
+      const isOfficer = Boolean(data.is_officer);
+      const authType = isOfficer ? "officer" : "student";
 
-      localStorage.setItem("student_student_id", data.student_id || "");
-      localStorage.setItem("student_student_number", data.student_number || "");
-      localStorage.setItem("student_first_name", data.first_name || "");
-      localStorage.setItem("student_last_name", data.last_name || "");
+      localStorage.removeItem("student_token");
+      localStorage.removeItem("officer_token");
+      setToken(authType, data.token);
+
+      localStorage.setItem(`${authType}_student_id`, data.student_id || "");
+      localStorage.setItem(
+        `${authType}_student_number`,
+        data.student_number || "",
+      );
+      localStorage.setItem(`${authType}_first_name`, data.first_name || "");
+      localStorage.setItem(`${authType}_last_name`, data.last_name || "");
+
+      if (isOfficer) {
+        localStorage.setItem("officer_officer_id", data.officer_id || "");
+        localStorage.setItem("officer_position", data.position || "Officer");
+        localStorage.setItem("officer_section", data.section || "");
+        localStorage.setItem("officer_role", data.role || "");
+        localStorage.setItem("officer_can_add", data.can_add ? "1" : "0");
+        localStorage.setItem("officer_can_edit", data.can_edit ? "1" : "0");
+        localStorage.setItem(
+          "officer_can_delete",
+          data.can_delete ? "1" : "0",
+        );
+        localStorage.setItem(
+          "officer_can_moderate",
+          data.can_moderate ? "1" : "0",
+        );
+      }
 
       showSnackbar("Login successful!", "success");
-      setTimeout(() => navigate("/student/home", { replace: true }), 1000);
+      setTimeout(
+        () =>
+          navigate(
+            isOfficer ? "/officer/dashboard" : "/student/home",
+            { replace: true },
+          ),
+        1000,
+      );
     } catch (error) {
       showSnackbar(`Login failed: ${error.message}`, "error");
     }
@@ -226,7 +284,6 @@ const Login = () => {
               }}
             >
               <MenuItem value="Admin">Admin</MenuItem>
-              <MenuItem value="Officer">Officer</MenuItem>
               <MenuItem value="Student">Student</MenuItem>
             </Select>
           </Box>

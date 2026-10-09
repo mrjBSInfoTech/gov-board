@@ -49,7 +49,6 @@ export default function Register() {
     first_name: "",
     last_name: "",
     student_number: "",
-    position: "",
     year: "",
     section: "",
     password: "",
@@ -97,7 +96,6 @@ export default function Register() {
       !form.first_name ||
       !form.last_name ||
       !form.student_number ||
-      !form.position ||
       !form.year ||
       !form.section ||
       !form.password ||
@@ -123,7 +121,6 @@ export default function Register() {
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
         student_number: form.student_number.trim(),
-        position: form.position.trim(),
         year: form.year.trim(),
         section: form.section.trim(),
         password: form.password,

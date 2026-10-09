@@ -6,7 +6,7 @@ import db from "../../database/db.js";
 const router = express.Router();
 
 // REGISTER
-// Table: student (student_id, officer_id, room_id, first_name, last_name, student_number, year, section, password, date_created)
+// Table: student (student_id, first_name, last_name, student_number, batch_id, password, date_created)
 router.post("/register", (req, res) => {
   const {
     first_name,
@@ -69,7 +69,7 @@ router.post("/register", (req, res) => {
                 first_name.trim(),
                 last_name.trim(),
                 student_number.trim(),
-                position ? position.trim() : null,
+                position?.trim() || "Student",
                 resolvedBatchId,
                 hashedPassword,
               ],
@@ -126,7 +126,8 @@ router.post("/login", (req, res) => {
 
   const sql = `
     SELECT s.student_id, s.first_name, s.last_name, s.student_number, s.position,
-      b.year_name AS year, b.section_name AS section, s.password
+      b.year_name AS year, b.section_name AS section, s.password,
+      s.role, s.can_add, s.can_edit, s.can_delete, s.can_moderate
     FROM student s
     LEFT JOIN batch b ON b.batch_id = s.batch_id
     WHERE s.student_number = ?
@@ -158,6 +159,16 @@ router.post("/login", (req, res) => {
         id: user.student_id,
         student_id: user.student_id,
         student_number: user.student_number,
+        ...(user.role
+          ? {
+              officer_id: user.student_id,
+              role: user.role,
+              can_add: user.can_add,
+              can_edit: user.can_edit,
+              can_delete: user.can_delete,
+              can_moderate: user.can_moderate,
+            }
+          : {}),
       },
       process.env.JWT_SECRET,
       { expiresIn: "10d" },
@@ -172,8 +183,97 @@ router.post("/login", (req, res) => {
       position: user.position || "Student",
       year: user.year,
       section: user.section,
+      officer_id: user.role ? user.student_id : undefined,
+      role: user.role || null,
+      can_add: user.can_add || 0,
+      can_edit: user.can_edit || 0,
+      can_delete: user.can_delete || 0,
+      can_moderate: user.can_moderate || 0,
+      is_officer: Boolean(user.role),
     });
   });
+});
+
+// Refresh an existing session after an administrator changes the account role.
+router.get("/session", (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ message: "No session token provided." });
+  }
+
+  jwt.verify(
+    token,
+    process.env.JWT_SECRET || "your_secret_key",
+    (tokenError, payload) => {
+      if (tokenError) {
+        return res.status(401).json({ message: "Session expired." });
+      }
+
+      const studentId = payload.student_id || payload.officer_id || payload.id;
+      if (!studentId) {
+        return res.status(401).json({ message: "Invalid session." });
+      }
+
+      db.query(
+        `SELECT s.student_id, s.first_name, s.last_name, s.student_number, s.position,
+          b.year_name AS year, b.section_name AS section,
+          s.role, s.can_add, s.can_edit, s.can_delete, s.can_moderate
+         FROM student s
+         LEFT JOIN batch b ON b.batch_id = s.batch_id
+         WHERE s.student_id = ?
+         LIMIT 1`,
+        [studentId],
+        (dbError, rows) => {
+          if (dbError) {
+            console.error("Session refresh database error:", dbError);
+            return res.status(500).json({ message: "Database error" });
+          }
+          if (rows.length === 0) {
+            return res.status(401).json({ message: "Account not found." });
+          }
+
+          const user = rows[0];
+          const refreshedToken = jwt.sign(
+            {
+              id: user.student_id,
+              student_id: user.student_id,
+              student_number: user.student_number,
+              ...(user.role
+                ? {
+                    officer_id: user.student_id,
+                    role: user.role,
+                    can_add: user.can_add,
+                    can_edit: user.can_edit,
+                    can_delete: user.can_delete,
+                    can_moderate: user.can_moderate,
+                  }
+                : {}),
+            },
+            process.env.JWT_SECRET || "your_secret_key",
+            { expiresIn: "10d" },
+          );
+
+          res.json({
+            token: refreshedToken,
+            student_id: user.student_id,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            student_number: user.student_number,
+            position: user.position || "Student",
+            year: user.year,
+            section: user.section,
+            officer_id: user.role ? user.student_id : undefined,
+            role: user.role || null,
+            can_add: user.can_add || 0,
+            can_edit: user.can_edit || 0,
+            can_delete: user.can_delete || 0,
+            can_moderate: user.can_moderate || 0,
+            is_officer: Boolean(user.role),
+          });
+        },
+      );
+    },
+  );
 });
 
 export default router;
@@ -188,7 +288,7 @@ import db from "../../database/db.js";
 const router = express.Router();
 
 // REGISTER 
-// Table: student (student_id, officer_id, room_id, first_name, last_name, student_number, password, date_created)
+// Table: student (student_id, first_name, last_name, student_number, batch_id, password, date_created)
 router.post("/register", (req, res) => {
   const { first_name, last_name, student_number, password } = req.body;
 

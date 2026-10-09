@@ -28,7 +28,6 @@ import StudentLogin from "../pages/student/Login";
 import StudentRegister from "../pages/student/Register";
 
 // Officer Pages
-import OfficerLogin from "../pages/officer/Login";
 import OfficerDashboard from "../pages/officer/Dashboard";
 import OfficerAnnouncement from "../pages/officer/Announcement";
 import OfficerModerate from "../pages/officer/Moderate";
@@ -50,9 +49,11 @@ export default function AppRoutes() {
             <Route path="register" element={<StudentRegister />} />
 
             {/* Public student pages */}
-            <Route element={<StudentLayout />}>
-              <Route path="home" element={<StudentHome />} />
-              <Route path="announcement" element={<StudentAnnouncement />} />
+            <Route element={<StudentRoute />}>
+              <Route element={<StudentLayout />}>
+                <Route path="home" element={<StudentHome />} />
+                <Route path="announcement" element={<StudentAnnouncement />} />
+              </Route>
             </Route>
           </Route>
 
@@ -79,8 +80,6 @@ export default function AppRoutes() {
 
           {/* Officer Routes */}
           <Route path="/officer">
-            <Route path="login" element={<OfficerLogin />} />
-
             <Route element={<OfficerRoute />}>
               <Route element={<OfficerLayout />}>
                 <Route index element={<Navigate to="dashboard" replace />} />

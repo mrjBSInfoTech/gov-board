@@ -37,6 +37,7 @@ function StudentPromoteDialog({
   onConfirm,
   error,
   requiresConfirmation = false,
+  positionOptions = POSITION_OPTIONS,
 }) {
   return (
     <Dialog
@@ -83,7 +84,7 @@ function StudentPromoteDialog({
                 label="Position"
                 onChange={(event) => onPositionChange(event.target.value)}
               >
-                {POSITION_OPTIONS.map((position) => (
+                {positionOptions.map((position) => (
                   <MenuItem key={position} value={position}>
                     {position}
                   </MenuItem>

@@ -21,6 +21,7 @@ import {
   fetchAnnouncements,
   validateRoomCode,
 } from "../../api/student/announcementAPI";
+import { fetchMyRoom } from "../../api/roomAPI";
 
 // Slide Transition for Snackbar
 function SlideTransition(props) {
@@ -31,10 +32,18 @@ export default function AnnouncementPage() {
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const studentId = localStorage.getItem("student_student_id");
+  const joinedRoomStorageKey = studentId
+    ? `studentJoinedRoom:${studentId}`
+    : null;
 
   // Room states
   const [joinedRoom, setJoinedRoom] = useState(() => {
-    const savedRoom = localStorage.getItem("studentJoinedRoom");
+    const currentStudentId = localStorage.getItem("student_student_id");
+    const savedRoom = currentStudentId
+      ? localStorage.getItem(`studentJoinedRoom:${currentStudentId}`)
+      : null;
+    localStorage.removeItem("studentJoinedRoom");
     return savedRoom ? JSON.parse(savedRoom) : null;
   });
   const [roomCodeInput, setRoomCodeInput] = useState("");
@@ -78,6 +87,29 @@ export default function AnnouncementPage() {
     }
   }, [joinedRoom]);
 
+  useEffect(() => {
+    let active = true;
+    fetchMyRoom()
+      .then((room) => {
+        if (!active) return;
+        if (!room) {
+          setJoinedRoom(null);
+          localStorage.removeItem(joinedRoomStorageKey);
+          return;
+        }
+        setJoinedRoom(room);
+        localStorage.setItem(joinedRoomStorageKey, JSON.stringify(room));
+      })
+      .catch(() => {
+        if (!active) return;
+        setError("Unable to load your room. Please try again.");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const handleJoinRoom = async (e) => {
     e.preventDefault();
     if (!roomCodeInput.trim()) return;
@@ -87,7 +119,7 @@ export default function AnnouncementPage() {
     try {
       const room = await validateRoomCode(roomCodeInput.trim());
       setJoinedRoom(room);
-      localStorage.setItem("studentJoinedRoom", JSON.stringify(room));
+      localStorage.setItem(joinedRoomStorageKey, JSON.stringify(room));
       showSnackbar(`Joined room: ${room.room_name}`, "success");
     } catch (err) {
       setError(err.message || "Invalid room code.");
@@ -98,7 +130,9 @@ export default function AnnouncementPage() {
 
   const handleLeaveRoom = () => {
     setJoinedRoom(null);
-    localStorage.removeItem("studentJoinedRoom");
+    if (joinedRoomStorageKey) {
+      localStorage.removeItem(joinedRoomStorageKey);
+    }
     setAnnouncements([]);
     setRoomCodeInput("");
   };

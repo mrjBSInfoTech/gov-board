@@ -7,6 +7,14 @@ import {
 import RoomChatFilesDialog from "./RoomChatFilesDialog";
 import RoomMembersDialog from "./RoomMembersDialog";
 import RoomToolsLauncher from "./RoomToolsLauncher";
+import StudentPromoteDialog from "../admin/Student/StudentPromoteDialog";
+import AccountDemote from "../admin/Account/AccountDemote";
+import { promoteStudent } from "../../api/admin/studentAPI";
+import { demoteAccount } from "../../api/admin/accountAPI";
+import {
+  promoteOfficerMember,
+  demoteOfficerMember,
+} from "../../api/officer/memberAPI";
 
 const FILE_BASE_URL =
   "http://localhost:5000/uploads/officer/uploadAnnouncement";
@@ -25,7 +33,38 @@ function getCurrentUserName() {
   return `${firstName} ${lastName}`.trim() || "Room member";
 }
 
-export default function RoomTabs({ announcements, roomId }) {
+export default function RoomTabs({
+  announcements,
+  roomId,
+  canManageMembers = false,
+}) {
+  const officerPosition = localStorage.getItem("officer_position")?.replace(
+    "Vice Mayor",
+    "Vice-Mayor",
+  );
+  const officerRanks = [
+    "Mayor",
+    "Vice-Mayor",
+    "Secretary",
+    "Treasurer",
+    "Auditor",
+    "P.I.O.",
+    "Protocol Officer",
+  ];
+  const officerRank = officerRanks.indexOf(officerPosition);
+  const isOfficerManager = Boolean(
+    localStorage.getItem("officer_token") && officerRank >= 0,
+  );
+  const officerPositionOptions = isOfficerManager
+    ? officerRanks.slice(officerRank + 1)
+    : officerRanks;
+  const canManageOfficerMember = (member) => {
+    if (!isOfficerManager) return true;
+    const memberRank = officerRanks.indexOf(
+      member.position?.replace("Vice Mayor", "Vice-Mayor"),
+    );
+    return member.member_type === "student" || memberRank > officerRank;
+  };
   const [chatFilesOpen, setChatFilesOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const [tab, setTab] = useState(0);
@@ -36,6 +75,12 @@ export default function RoomTabs({ announcements, roomId }) {
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [selectedMember, setSelectedMember] = useState(null);
+  const [promotePosition, setPromotePosition] = useState("");
+  const [promoteDialogOpen, setPromoteDialogOpen] = useState(false);
+  const [promoteError, setPromoteError] = useState("");
+  const [requiresConfirmation, setRequiresConfirmation] = useState(false);
+  const [demoteDialogOpen, setDemoteDialogOpen] = useState(false);
 
   const loadMembers = useCallback(() => {
     if (!roomId) return;
@@ -110,6 +155,72 @@ export default function RoomTabs({ announcements, roomId }) {
 
   const clearError = () => setError("");
 
+  const handlePromote = (member) => {
+    setMembersOpen(false);
+    setSelectedMember(member);
+    setPromotePosition("");
+    setPromoteError("");
+    setRequiresConfirmation(false);
+    setPromoteDialogOpen(true);
+  };
+
+  const handleConfirmPromotion = async () => {
+    if (!selectedMember || !promotePosition) return;
+
+    try {
+      if (isOfficerManager) {
+        await promoteOfficerMember(
+          selectedMember.member_id,
+          roomId,
+          promotePosition,
+          requiresConfirmation,
+        );
+      } else {
+        await promoteStudent(
+          selectedMember.member_id,
+          promotePosition,
+          requiresConfirmation,
+        );
+      }
+      setPromoteDialogOpen(false);
+      setSelectedMember(null);
+      setPromotePosition("");
+      setRequiresConfirmation(false);
+      loadMembers();
+    } catch (promotionErrorResponse) {
+      const responseData = promotionErrorResponse?.response?.data;
+      const message =
+        responseData?.message ||
+        promotionErrorResponse.message ||
+        "Unable to promote student.";
+      setPromoteError(message);
+      setRequiresConfirmation(Boolean(responseData?.requiresConfirmation));
+    }
+  };
+
+  const handleDemote = (member) => {
+    setMembersOpen(false);
+    setSelectedMember(member);
+    setDemoteDialogOpen(true);
+  };
+
+  const handleConfirmDemotion = async () => {
+    if (!selectedMember) return;
+
+    try {
+      if (isOfficerManager) {
+        await demoteOfficerMember(selectedMember.member_id, roomId);
+      } else {
+        await demoteAccount(selectedMember.member_id);
+      }
+      setDemoteDialogOpen(false);
+      setSelectedMember(null);
+      loadMembers();
+    } catch (demotionError) {
+      setError(demotionError.message || "Unable to demote officer.");
+    }
+  };
+
   return (
     <>
       <RoomToolsLauncher
@@ -141,6 +252,34 @@ export default function RoomTabs({ announcements, roomId }) {
         onClearError={clearError}
       />
 
+      <StudentPromoteDialog
+        open={promoteDialogOpen}
+        handleClose={() => {
+          setPromoteDialogOpen(false);
+          setSelectedMember(null);
+          setPromoteError("");
+          setPromotePosition("");
+          setRequiresConfirmation(false);
+        }}
+        selectedStudent={selectedMember}
+        selectedPosition={promotePosition}
+        onPositionChange={setPromotePosition}
+        onConfirm={handleConfirmPromotion}
+        error={promoteError}
+        requiresConfirmation={requiresConfirmation}
+        positionOptions={officerPositionOptions}
+      />
+
+      <AccountDemote
+        open={demoteDialogOpen}
+        handleClose={() => {
+          setDemoteDialogOpen(false);
+          setSelectedMember(null);
+        }}
+        selectedAccount={selectedMember}
+        onConfirm={handleConfirmDemotion}
+      />
+
       <RoomMembersDialog
         open={membersOpen}
         onClose={() => setMembersOpen(false)}
@@ -148,6 +287,10 @@ export default function RoomTabs({ announcements, roomId }) {
         loading={loadingMembers}
         error={error}
         onClearError={clearError}
+        canManageMembers={canManageMembers}
+        canManageMember={canManageOfficerMember}
+        onPromote={handlePromote}
+        onDemote={handleDemote}
       />
     </>
   );

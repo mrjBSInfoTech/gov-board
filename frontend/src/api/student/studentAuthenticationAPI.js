@@ -58,6 +58,17 @@ export const loginUser = async ({ student_number, password }) => {
   }
 };
 
+export const refreshSession = async (token) => {
+  try {
+    const res = await api.get("/session", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+
 // LOGOUT
 export const logoutUser = () => {
   localStorage.removeItem("student_token");

@@ -18,19 +18,16 @@ import {
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import VisibilityIcon from "@mui/icons-material/Visibility";
-import PersonRemoveAlt1Icon from "@mui/icons-material/PersonRemoveAlt1";
 import SearchIcon from "@mui/icons-material/Search";
 import AccountInfo from "../../components/admin/Account/AccountInfo";
 import AccountForm from "../../components/admin/Account/AccountForm";
 import AccountDelete from "../../components/admin/Account/AccountDelete";
-import AccountDemote from "../../components/admin/Account/AccountDemote";
 import PeopleCardList from "../../components/common/PeopleCardList";
 import {
   fetchAccounts,
   addAccount,
   updateAccount,
   deleteAccount,
-  demoteAccount,
 } from "../../api/admin/accountAPI";
 
 // Slide Transition for Snackbar
@@ -43,7 +40,6 @@ export default function Dashboard() {
   const [openAccountCard, setOpenAccountCard] = useState(false);
   const [openAccountForm, setOpenAccountForm] = useState(false);
   const [openAccountDelete, setOpenAccountDelete] = useState(false);
-  const [openAccountDemote, setOpenAccountDemote] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [accountErrorMessage, setAccountErrorMessage] = useState("");
   const [snackbarOpen, setSnackbarOpen] = useState(false);
@@ -146,27 +142,6 @@ export default function Dashboard() {
       console.error("Error deleting account:", err, "error");
       showSnackbar(err.message || "Error deleting account", "error");
     }
-  };
-
-  const handleDemoteAccount = async (account) => {
-    try {
-      await demoteAccount(account.officer_id);
-      await loadAccounts();
-      setOpenAccountDemote(false);
-      setSelectedAccount(null);
-      showSnackbar(
-        `${account.first_name} ${account.last_name} was demoted to student successfully`,
-        "success",
-      );
-    } catch (err) {
-      console.error("Error demoting account:", err);
-      showSnackbar(err.message || "Unable to demote account", "error");
-    }
-  };
-
-  const handleOpenAccountDemote = (account) => {
-    setSelectedAccount(account);
-    setOpenAccountDemote(true);
   };
 
   // Snackbar handlers
@@ -306,15 +281,6 @@ export default function Dashboard() {
                   <EditIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
-              <Tooltip title="Demote">
-                <IconButton
-                  size="small"
-                  color="warning"
-                  onClick={() => handleOpenAccountDemote(account)}
-                >
-                  <PersonRemoveAlt1Icon fontSize="small" />
-                </IconButton>
-              </Tooltip>
               <Tooltip title="Delete">
                 <IconButton
                   size="small"
@@ -347,18 +313,6 @@ export default function Dashboard() {
         selectedAccount={selectedAccount}
         onDelete={handleDeleteAccount}
       />
-      <AccountDemote
-        open={openAccountDemote}
-        handleClose={() => {
-          setOpenAccountDemote(false);
-          setSelectedAccount(null);
-        }}
-        selectedAccount={selectedAccount}
-        onConfirm={() =>
-          selectedAccount && handleDemoteAccount(selectedAccount)
-        }
-      />
-
       {/* Snackbar Notification */}
       <Snackbar
         open={snackbarOpen}

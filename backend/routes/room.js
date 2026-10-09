@@ -17,33 +17,81 @@ const authenticateRoomUser = (req, res, next) => {
     (err, user) => {
       if (err)
         return res.status(403).json({ message: "Invalid or expired token." });
-      req.user = user;
-      next();
+
+      if (!user.officer_id) {
+        req.user = user;
+        return next();
+      }
+
+      db.query(
+        "SELECT role FROM student WHERE student_id = ? LIMIT 1",
+        [user.officer_id],
+        (roleError, rows) => {
+          if (roleError) {
+            console.error("Room account role verification error:", roleError);
+            return res.status(500).json({ message: "Unable to verify account role." });
+          }
+          if (rows.length === 0 || !rows[0].role) {
+            return res.status(403).json({
+              message: "This account is now a student. Please use the student panel.",
+              roleChanged: true,
+            });
+          }
+
+          req.user = user;
+          next();
+        },
+      );
     },
   );
 };
 
 router.get("/:roomId/members", authenticateRoomUser, (req, res) => {
   db.query(
-    `SELECT rm.member_id, s.first_name, s.last_name, s.position, b.section_name AS section, rm.member_type
-    FROM room_member rm
-    INNER JOIN student s ON s.student_id = rm.member_id
-     LEFT JOIN batch b ON b.batch_id = s.batch_id
-     WHERE rm.room_id = ? AND rm.member_type = 'student'
-     UNION ALL
-     SELECT rm.member_id, o.first_name, o.last_name, o.position, b.section_name AS section, rm.member_type
+     `SELECT rm.member_id, s.first_name, s.last_name, s.position,
+       b.section_name AS section,
+       CASE WHEN s.role IS NOT NULL THEN 'officer' ELSE 'student' END AS member_type
      FROM room_member rm
-     INNER JOIN officer o ON o.officer_id = rm.member_id
-     LEFT JOIN batch b ON b.batch_id = o.batch_id
-     WHERE rm.room_id = ? AND rm.member_type = 'officer'
+     INNER JOIN student s ON s.student_id = rm.member_id
+     LEFT JOIN batch b ON b.batch_id = s.batch_id
+     WHERE rm.room_id = ?
      ORDER BY first_name ASC, last_name ASC`,
-    [req.params.roomId, req.params.roomId],
+     [req.params.roomId],
     (err, results) => {
       if (err) {
         console.error("Room member read error:", err);
         return res.status(500).json({ error: "Unable to load room members" });
       }
       res.json(results);
+    },
+  );
+});
+
+router.get("/my-room", authenticateRoomUser, (req, res) => {
+  const memberId = req.user.officer_id || req.user.student_id || req.user.id;
+
+  if (!memberId) {
+    return res.status(403).json({ message: "Unable to identify room member." });
+  }
+
+  db.query(
+    `SELECT r.room_id, r.room_number, r.room_name, r.date_created
+     FROM room_member rm
+     INNER JOIN room r ON r.room_id = rm.room_id
+     INNER JOIN student s ON s.student_id = rm.member_id
+     WHERE rm.member_id = ?
+       AND (rm.member_type = CASE WHEN s.role IS NULL THEN 'student' ELSE 'officer' END
+            OR rm.member_type IS NULL)
+     ORDER BY rm.date_joined DESC, rm.room_id DESC
+     LIMIT 1`,
+    [memberId],
+    (err, results) => {
+      if (err) {
+        console.error("Current room lookup error:", err);
+        return res.status(500).json({ message: "Unable to load current room" });
+      }
+
+      res.json(results[0] || null);
     },
   );
 });

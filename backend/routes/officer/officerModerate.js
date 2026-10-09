@@ -8,10 +8,10 @@ router.get("/same-section", authenticateOfficer, (req, res) => {
   const officerId = Number(req.user?.officer_id);
 
   const resolveSectionSql = `
-    SELECT b.section_name AS section
-    FROM officer o
+    SELECT b.year_name AS year, b.section_name AS section
+    FROM student o
     LEFT JOIN batch b ON b.batch_id = o.batch_id
-    WHERE o.officer_id = ?
+    WHERE o.student_id = ? AND o.role IS NOT NULL
     LIMIT 1
   `;
 
@@ -21,13 +21,14 @@ router.get("/same-section", authenticateOfficer, (req, res) => {
       return res.status(500).json({ message: "Database error" });
     }
 
+    const year = String(sectionRows?.[0]?.year || "").trim();
     const section = String(sectionRows?.[0]?.section || "").trim();
-    const hasSection = Boolean(section);
+    const hasBatch = Boolean(year && section);
 
-    const sql = hasSection
+    const sql = hasBatch
       ? `
           SELECT
-            o.officer_id AS id,
+            o.student_id AS id,
             o.first_name,
             o.last_name,
             o.student_number,
@@ -35,9 +36,9 @@ router.get("/same-section", authenticateOfficer, (req, res) => {
             bo.year_name AS year,
             bo.section_name AS section,
             'Officer' AS member_type
-          FROM officer o
+          FROM student o
           LEFT JOIN batch bo ON bo.batch_id = o.batch_id
-          WHERE bo.section_name = ?
+          WHERE bo.year_name = ? AND bo.section_name = ? AND o.role IS NOT NULL
 
           UNION ALL
 
@@ -52,13 +53,13 @@ router.get("/same-section", authenticateOfficer, (req, res) => {
             'Student' AS member_type
           FROM student s
           LEFT JOIN batch bs ON bs.batch_id = s.batch_id
-          WHERE bs.section_name = ?
+          WHERE s.role IS NULL AND bs.year_name = ? AND bs.section_name = ?
 
           ORDER BY member_type ASC, first_name ASC, last_name ASC
         `
       : `
           SELECT
-            o.officer_id AS id,
+            o.student_id AS id,
             o.first_name,
             o.last_name,
             o.student_number,
@@ -66,8 +67,9 @@ router.get("/same-section", authenticateOfficer, (req, res) => {
             bo.year_name AS year,
             bo.section_name AS section,
             'Officer' AS member_type
-          FROM officer o
+          FROM student o
           LEFT JOIN batch bo ON bo.batch_id = o.batch_id
+          WHERE o.role IS NOT NULL
 
           UNION ALL
 
@@ -82,11 +84,12 @@ router.get("/same-section", authenticateOfficer, (req, res) => {
             'Student' AS member_type
           FROM student s
           LEFT JOIN batch bs ON bs.batch_id = s.batch_id
+          WHERE s.role IS NULL
 
           ORDER BY member_type ASC, first_name ASC, last_name ASC
         `;
 
-    const params = hasSection ? [section, section] : [];
+    const params = hasBatch ? [year, section, year, section] : [];
 
     db.query(sql, params, (queryErr, results) => {
       if (queryErr) {

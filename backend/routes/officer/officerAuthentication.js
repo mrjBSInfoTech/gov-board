@@ -21,15 +21,14 @@ router.post("/login", async (req, res) => {
   }
 
   const sql = `
-    SELECT o.officer_id, o.student_number, o.position,
+    SELECT s.student_id AS officer_id, s.student_number, s.position,
       b.year_name AS year,
       b.section_name AS section,
-      o.first_name, o.last_name, o.password,
-      r.role, r.can_add, r.can_edit, r.can_delete, r.can_moderate
-    FROM officer o
-    LEFT JOIN officer_role r ON o.officer_id = r.officer_id
-    LEFT JOIN batch b ON b.batch_id = o.batch_id
-    WHERE o.student_number = ?
+      s.first_name, s.last_name, s.password,
+      s.role, s.can_add, s.can_edit, s.can_delete, s.can_moderate
+    FROM student s
+    LEFT JOIN batch b ON b.batch_id = s.batch_id
+    WHERE s.student_number = ? AND s.role IS NOT NULL
     LIMIT 1`;
 
   db.query(sql, [student_number.trim()], (err, results) => {

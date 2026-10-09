@@ -97,16 +97,27 @@ router.get("/room/validate/:roomNumber", authenticateOfficer, (req, res) => {
 
     const officerId = req.user.officer_id;
     db.query(
-      `INSERT INTO room_member (room_id, member_type, member_id)
-       VALUES (?, 'officer', ?)
-       ON DUPLICATE KEY UPDATE member_id = VALUES(member_id)`,
-      [results[0].room_id, officerId],
-      (membershipErr) => {
-        if (membershipErr) {
-          console.error("Room membership update error:", membershipErr);
+      "DELETE FROM room_member WHERE member_type = 'officer' AND member_id = ?",
+      [officerId],
+      (removeErr) => {
+        if (removeErr) {
+          console.error("Previous room membership cleanup error:", removeErr);
           return res.status(500).json({ error: "Unable to join room" });
         }
-        res.json(results[0]);
+
+        db.query(
+          `INSERT INTO room_member (room_id, member_type, member_id)
+           VALUES (?, 'officer', ?)
+           ON DUPLICATE KEY UPDATE member_id = VALUES(member_id)`,
+          [results[0].room_id, officerId],
+          (membershipErr) => {
+            if (membershipErr) {
+              console.error("Room membership update error:", membershipErr);
+              return res.status(500).json({ error: "Unable to join room" });
+            }
+            res.json(results[0]);
+          },
+        );
       },
     );
   });

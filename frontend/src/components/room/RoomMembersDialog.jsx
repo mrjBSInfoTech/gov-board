@@ -17,6 +17,8 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
 import PersonIcon from "@mui/icons-material/Person";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import PersonRemoveAlt1Icon from "@mui/icons-material/PersonRemoveAlt1";
 
 export default function RoomMembersDialog({
   open,
@@ -25,6 +27,10 @@ export default function RoomMembersDialog({
   loading,
   error,
   onClearError,
+  onPromote,
+  onDemote,
+  canManageMembers = false,
+  canManageMember = () => true,
 }) {
   const memberGroups = [
     {
@@ -126,6 +132,32 @@ export default function RoomMembersDialog({
                             primary={`${member.first_name} ${member.last_name}`}
                             secondary={`${member.position || "Member"} - ${member.section ? `Section ${member.section}` : "Room member"}`}
                           />
+                          {canManageMembers && canManageMember(member) && (
+                            <IconButton
+                              edge="end"
+                              color={
+                                member.member_type === "student"
+                                  ? "success"
+                                  : "warning"
+                              }
+                              aria-label={
+                                member.member_type === "student"
+                                  ? "Promote student"
+                                  : "Demote officer"
+                              }
+                              onClick={() =>
+                                member.member_type === "student"
+                                  ? onPromote(member)
+                                  : onDemote(member)
+                              }
+                            >
+                              {member.member_type === "student" ? (
+                                <TrendingUpIcon />
+                              ) : (
+                                <PersonRemoveAlt1Icon />
+                              )}
+                            </IconButton>
+                          )}
                         </ListItem>
                       );
                     })}

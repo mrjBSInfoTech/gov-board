@@ -5,7 +5,9 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
+  const authSection = localStorage.getItem("auth_section");
   const token =
+    (authSection && localStorage.getItem(`${authSection}_token`)) ||
     localStorage.getItem("officer_token") ||
     localStorage.getItem("student_token") ||
     localStorage.getItem("admin_token");
@@ -39,6 +41,15 @@ export const fetchRoomMessages = async (roomId) => {
 export const fetchRoomMembers = async (roomId) => {
   try {
     const response = await api.get(`/${roomId}/members`);
+    return response.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+
+export const fetchMyRoom = async () => {
+  try {
+    const response = await api.get("/my-room");
     return response.data;
   } catch (error) {
     handleError(error);

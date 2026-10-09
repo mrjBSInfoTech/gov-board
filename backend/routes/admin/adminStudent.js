@@ -1,4 +1,5 @@
 import express from "express";
+import bcrypt from "bcryptjs";
 import db from "../../database/db.js";
 import { authenticateAdmin } from "../../middleware/adminAuthMiddleware.js";
 
@@ -45,6 +46,7 @@ router.get("/", authenticateAdmin, (req, res) => {
       b.year_name AS year, b.section_name AS section, s.date_created
     FROM student s
     LEFT JOIN batch b ON b.batch_id = s.batch_id
+    WHERE s.role IS NULL
     ORDER BY s.date_created DESC`;
 
   db.query(sql, (err, result) => {
@@ -55,6 +57,67 @@ router.get("/", authenticateAdmin, (req, res) => {
 
     res.json(result);
   });
+});
+
+router.put("/:id", authenticateAdmin, async (req, res) => {
+  const studentId = Number(req.params.id);
+  const { first_name, last_name, student_number, year, section, password } =
+    req.body;
+
+  if (
+    !studentId ||
+    !first_name?.trim() ||
+    !last_name?.trim() ||
+    !student_number?.trim() ||
+    !year?.trim() ||
+    !section?.trim()
+  ) {
+    return res
+      .status(400)
+      .json({ message: "Please fill all the required fields" });
+  }
+
+  try {
+    const connection = db.promise();
+    await connection.beginTransaction();
+    const batchId = await resolveBatchId(connection, year, section);
+    const values = [
+      first_name.trim(),
+      last_name.trim(),
+      student_number.trim(),
+      batchId,
+    ];
+    let updateSql =
+      "UPDATE student SET first_name = ?, last_name = ?, student_number = ?, batch_id = ?";
+
+    if (password) {
+      if (password.length < 6) {
+        await connection.rollback();
+        return res
+          .status(400)
+          .json({ message: "Password must be at least 6 characters." });
+      }
+      updateSql += ", password = ?";
+      values.push(await bcrypt.hash(password, 10));
+    }
+
+    values.push(studentId);
+    const [result] = await connection.query(
+      `${updateSql} WHERE student_id = ?`,
+      values,
+    );
+
+    if (result.affectedRows === 0) {
+      await connection.rollback();
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    await connection.commit();
+    return res.json({ message: "Student account updated successfully" });
+  } catch (error) {
+    console.error("DB error:", error);
+    return res.status(500).json({ message: "Database error" });
+  }
 });
 
 router.post("/:id/promote", authenticateAdmin, async (req, res) => {
@@ -85,10 +148,10 @@ router.post("/:id/promote", authenticateAdmin, async (req, res) => {
 
     const student = studentRows[0];
     const duplicateSql = `
-      SELECT o.*, b.year_name AS year, b.section_name AS section
-      FROM officer o
-      LEFT JOIN batch b ON b.batch_id = o.batch_id
-      WHERE b.section_name = ? AND o.position = ?
+      SELECT s.*, b.year_name AS year, b.section_name AS section
+      FROM student s
+      LEFT JOIN batch b ON b.batch_id = s.batch_id
+      WHERE b.section_name = ? AND s.position = ? AND s.role IS NOT NULL
       LIMIT 1
     `;
 
@@ -110,19 +173,6 @@ router.post("/:id/promote", authenticateAdmin, async (req, res) => {
       });
     }
 
-    const insertSql = `
-      INSERT INTO officer (
-        admin_id,
-        student_number,
-        position,
-        batch_id,
-        first_name,
-        last_name,
-        password,
-        date_created
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
-    `;
-
     const connection = db.promise();
     await connection.beginTransaction();
 
@@ -130,34 +180,17 @@ router.post("/:id/promote", authenticateAdmin, async (req, res) => {
       if (duplicateRows && duplicateRows.length > 0) {
         const previousHolder = duplicateRows[0];
 
-        const restoreStudentSql = `
-          INSERT INTO student (
-            officer_id,
-            room_id,
-            first_name,
-            last_name,
-            student_number,
-            position,
-            batch_id,
-            password,
-            date_created
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
-        `;
-
-        await connection.query(restoreStudentSql, [
-          null,
-          null,
-          previousHolder.first_name,
-          previousHolder.last_name,
-          previousHolder.student_number,
-          null,
-          previousHolder.batch_id,
-          previousHolder.password,
-        ]);
-
-        await connection.query(`DELETE FROM officer WHERE officer_id = ?`, [
-          previousHolder.officer_id,
-        ]);
+        await connection.query(
+          `UPDATE student
+           SET position = 'Student', role = NULL,
+               can_add = 0, can_edit = 0, can_delete = 0, can_moderate = 0
+           WHERE student_id = ?`,
+          [previousHolder.student_id],
+        );
+        await connection.query(
+          "UPDATE room_member SET member_type = 'student' WHERE member_id = ?",
+          [previousHolder.student_id],
+        );
       }
 
       const batchId = await resolveBatchId(
@@ -165,25 +198,23 @@ router.post("/:id/promote", authenticateAdmin, async (req, res) => {
         student.year,
         student.section,
       );
-      const [insertResult] = await connection.query(insertSql, [
-        req.user?.admin_id || null,
-        student.student_number,
-        position,
-        batchId,
-        student.first_name,
-        student.last_name,
-        student.password,
-      ]);
-
-      await connection.query(`DELETE FROM student WHERE student_id = ?`, [
-        studentId,
-      ]);
+      await connection.query(
+        `UPDATE student
+         SET admin_id = ?, position = ?, batch_id = ?, role = 'officer',
+             can_add = 1, can_edit = 1, can_delete = 1, can_moderate = 0
+         WHERE student_id = ?`,
+        [req.user?.admin_id || null, position, batchId, studentId],
+      );
+      await connection.query(
+        "UPDATE room_member SET member_type = 'officer' WHERE member_id = ?",
+        [studentId],
+      );
 
       await connection.commit();
 
       res.status(201).json({
         message: `${student.first_name} ${student.last_name} promoted to ${position}.`,
-        officer_id: insertResult.insertId,
+        officer_id: studentId,
         requiresConfirmation: false,
       });
     } catch (transactionError) {

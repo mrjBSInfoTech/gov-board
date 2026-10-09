@@ -3,6 +3,7 @@
 -- Original host: 127.0.0.1
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.0.30
+-- Students and officers share the `student` table.
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -80,54 +81,6 @@ INSERT INTO `batch` (`batch_id`, `year_name`, `section_name`, `date_created`) VA
 -- --------------------------------------------------------
 
 --
--- Table structure for table `officer`
---
-
-CREATE TABLE `officer` (
-  `officer_id` int(11) NOT NULL,
-  `admin_id` int(11) DEFAULT NULL,
-  `student_number` varchar(150) DEFAULT NULL,
-  `position` varchar(100) DEFAULT NULL,
-  `batch_id` int(11) DEFAULT NULL,
-  `first_name` varchar(100) NOT NULL,
-  `last_name` varchar(100) NOT NULL,
-  `password` varchar(255) NOT NULL,
-  `date_created` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `officer`
---
-
-INSERT INTO `officer` (`officer_id`, `admin_id`, `student_number`, `position`, `batch_id`, `first_name`, `last_name`, `password`, `date_created`) VALUES
-(1, 1, '1000000000', 'Mayor', 1, 'John', 'Doe', '$2b$10$70ad/kVr/tcGhcNtMCSk9eALW2w0J8iI3BUytDuO1Mqq0Frqzo5Se', '2026-09-10 22:48:15');
-
--- --------------------------------------------------------
-
---
--- Table structure for table `officer_role`
---
-
-CREATE TABLE `officer_role` (
-  `officer_role_id` int(11) NOT NULL,
-  `officer_id` int(11) DEFAULT NULL,
-  `role` varchar(100) NOT NULL,
-  `can_add` tinyint(1) DEFAULT 0,
-  `can_edit` tinyint(1) DEFAULT 0,
-  `can_delete` tinyint(1) DEFAULT 0,
-  `can_moderate` tinyint(1) DEFAULT 0
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `officer_role`
---
-
-INSERT INTO `officer_role` (`officer_role_id`, `officer_id`, `role`, `can_add`, `can_edit`, `can_delete`, `can_moderate`) VALUES
-(1, 1, 'officer', 1, 1, 1, 0);
-
--- --------------------------------------------------------
-
---
 -- Table structure for table `room`
 --
 
@@ -179,14 +132,18 @@ CREATE TABLE `room_member` (
 
 CREATE TABLE `student` (
   `student_id` int(11) NOT NULL,
-  `officer_id` int(11) DEFAULT NULL,
-  `room_id` int(11) DEFAULT NULL,
+  `admin_id` int(11) DEFAULT NULL,
   `first_name` varchar(100) NOT NULL,
   `last_name` varchar(100) NOT NULL,
-  `student_number` varchar(50) NOT NULL,
-  `position` varchar(100) DEFAULT 'Candidate',
+  `student_number` varchar(150) NOT NULL,
+  `position` varchar(100) DEFAULT 'Student',
   `batch_id` int(11) DEFAULT NULL,
   `password` varchar(255) NOT NULL,
+  `role` varchar(100) DEFAULT NULL,
+  `can_add` tinyint(1) NOT NULL DEFAULT 0,
+  `can_edit` tinyint(1) NOT NULL DEFAULT 0,
+  `can_delete` tinyint(1) NOT NULL DEFAULT 0,
+  `can_moderate` tinyint(1) NOT NULL DEFAULT 0,
   `date_created` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -194,15 +151,10 @@ CREATE TABLE `student` (
 -- Dumping data for table `student`
 --
 
-INSERT INTO `student` (`student_id`, `officer_id`, `room_id`, `first_name`, `last_name`, `student_number`, `position`, `batch_id`, `password`, `date_created`) VALUES
-(4, NULL, NULL, 'Jake', 'Doe', '1000000000', NULL, 1, '$2b$10$70ad/kVr/tcGhcNtMCSk9eALW2w0J8iI3BUytDuO1Mqq0Frqzo5Se', '2026-09-20 22:03:55'),
-(5, NULL, NULL, 'Joy', 'Doe', '2000000000', NULL, 1, '$2b$10$70ad/kVr/tcGhcNtMCSk9eALW2w0J8iI3BUytDuO1Mqq0Frqzo5Se', '2026-09-20 22:08:42');
-
--- Preserve memberships from older dumps that used student.room_id.
-INSERT INTO `room_member` (`room_id`, `member_type`, `member_id`)
-SELECT `room_id`, 'student', `student_id`
-FROM `student`
-WHERE `room_id` IS NOT NULL;
+INSERT INTO `student` (`student_id`, `admin_id`, `first_name`, `last_name`, `student_number`, `position`, `batch_id`, `password`, `role`, `can_add`, `can_edit`, `can_delete`, `can_moderate`, `date_created`) VALUES
+(1, 1, 'John', 'Doe', '3000000000', 'Mayor', 1, '$2b$10$70ad/kVr/tcGhcNtMCSk9eALW2w0J8iI3BUytDuO1Mqq0Frqzo5Se', 'officer', 1, 1, 1, 0, '2026-09-10 22:48:15'),
+(4, NULL, 'Jake', 'Doe', '1000000000', 'Student', 1, '$2b$10$70ad/kVr/tcGhcNtMCSk9eALW2w0J8iI3BUytDuO1Mqq0Frqzo5Se', NULL, 0, 0, 0, 0, '2026-09-20 22:03:55'),
+(5, NULL, 'Joy', 'Doe', '2000000000', 'Student', 1, '$2b$10$70ad/kVr/tcGhcNtMCSk9eALW2w0J8iI3BUytDuO1Mqq0Frqzo5Se', NULL, 0, 0, 0, 0, '2026-09-20 22:08:42');
 
 --
 -- Indexes for dumped tables
@@ -230,20 +182,6 @@ ALTER TABLE `batch`
   ADD UNIQUE KEY `uq_batch_year_section` (`year_name`,`section_name`);
 
 --
--- Indexes for table `officer`
---
-ALTER TABLE `officer`
-  ADD PRIMARY KEY (`officer_id`),
-  ADD KEY `admin_id` (`admin_id`),
-  ADD KEY `idx_officer_batch_id` (`batch_id`);
-
---
--- Indexes for table `officer_role`
---
-ALTER TABLE `officer_role`
-  ADD PRIMARY KEY (`officer_role_id`),
-  ADD UNIQUE KEY `officer_id` (`officer_id`);
-
 --
 -- Indexes for table `room`
 --
@@ -269,8 +207,6 @@ ALTER TABLE `room_member`
 ALTER TABLE `student`
   ADD PRIMARY KEY (`student_id`),
   ADD UNIQUE KEY `student_number` (`student_number`),
-  ADD KEY `officer_id` (`officer_id`),
-  ADD KEY `room_id` (`room_id`),
   ADD KEY `idx_student_batch_id` (`batch_id`);
 
 --
@@ -296,17 +232,6 @@ ALTER TABLE `batch`
   MODIFY `batch_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
--- AUTO_INCREMENT for table `officer`
---
-ALTER TABLE `officer`
-  MODIFY `officer_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
-
---
--- AUTO_INCREMENT for table `officer_role`
---
-ALTER TABLE `officer_role`
-  MODIFY `officer_role_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
-
 --
 -- AUTO_INCREMENT for table `room`
 --
@@ -340,18 +265,6 @@ ALTER TABLE `announcement`
   ADD CONSTRAINT `announcement_ibfk_1` FOREIGN KEY (`room_id`) REFERENCES `room` (`room_id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `officer`
---
-ALTER TABLE `officer`
-  ADD CONSTRAINT `fk_officer_batch` FOREIGN KEY (`batch_id`) REFERENCES `batch` (`batch_id`) ON DELETE SET NULL ON UPDATE CASCADE,
-  ADD CONSTRAINT `officer_ibfk_1` FOREIGN KEY (`admin_id`) REFERENCES `admin` (`admin_id`) ON DELETE SET NULL;
-
---
--- Constraints for table `officer_role`
---
-ALTER TABLE `officer_role`
-  ADD CONSTRAINT `officer_role_ibfk_1` FOREIGN KEY (`officer_id`) REFERENCES `officer` (`officer_id`) ON DELETE CASCADE;
-
 --
 -- Constraints for table `room_message`
 --
@@ -366,9 +279,8 @@ ALTER TABLE `room_member`
 -- Constraints for table `student`
 --
 ALTER TABLE `student`
-  ADD CONSTRAINT `fk_student_batch` FOREIGN KEY (`batch_id`) REFERENCES `batch` (`batch_id`) ON DELETE SET NULL ON UPDATE CASCADE,
-  ADD CONSTRAINT `student_ibfk_1` FOREIGN KEY (`officer_id`) REFERENCES `officer` (`officer_id`) ON DELETE SET NULL,
-  ADD CONSTRAINT `student_ibfk_2` FOREIGN KEY (`room_id`) REFERENCES `room` (`room_id`) ON DELETE SET NULL;
+  ADD CONSTRAINT `fk_student_admin` FOREIGN KEY (`admin_id`) REFERENCES `admin` (`admin_id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `fk_student_batch` FOREIGN KEY (`batch_id`) REFERENCES `batch` (`batch_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

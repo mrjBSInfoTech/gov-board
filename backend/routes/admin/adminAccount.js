@@ -58,25 +58,25 @@ const rolePermissions = (role, values = {}) => {
 router.get("/", authenticateAdmin, (req, res) => {
   const sql = `
     SELECT
-      o.officer_id,
-      o.admin_id,
-      o.student_number,
-      o.position,
+      s.student_id AS officer_id,
+      s.admin_id,
+      s.student_number,
+      s.position,
       b.year_name AS year,
       b.section_name AS section,
-      o.first_name,
-      o.last_name,
-      o.date_created,
-      r.officer_role_id,
-      r.role,
-      r.can_add,
-      r.can_edit,
-      r.can_delete,
-      r.can_moderate
-    FROM officer o
-    LEFT JOIN officer_role r ON o.officer_id = r.officer_id
-    LEFT JOIN batch b ON b.batch_id = o.batch_id
-    ORDER BY o.date_created DESC`;
+      s.first_name,
+      s.last_name,
+      s.date_created,
+      s.student_id AS officer_role_id,
+      s.role,
+      s.can_add,
+      s.can_edit,
+      s.can_delete,
+      s.can_moderate
+    FROM student s
+    LEFT JOIN batch b ON b.batch_id = s.batch_id
+    WHERE s.role IS NOT NULL
+    ORDER BY s.date_created DESC`;
 
   db.query(sql, (err, result) => {
     if (err) {
@@ -99,10 +99,10 @@ router.post("/:id/demote", authenticateAdmin, async (req, res) => {
     await connection.beginTransaction();
 
     const [officerRows] = await connection.query(
-      `SELECT o.*, b.year_name AS year, b.section_name AS section
-       FROM officer o
-       LEFT JOIN batch b ON b.batch_id = o.batch_id
-       WHERE o.officer_id = ? LIMIT 1`,
+      `SELECT s.*, b.year_name AS year, b.section_name AS section
+       FROM student s
+       LEFT JOIN batch b ON b.batch_id = s.batch_id
+       WHERE s.student_id = ? AND s.role IS NOT NULL LIMIT 1`,
       [officerId],
     );
 
@@ -114,36 +114,16 @@ router.post("/:id/demote", authenticateAdmin, async (req, res) => {
     const officer = officerRows[0];
 
     await connection.query(
-      `INSERT INTO student (
-        officer_id,
-        room_id,
-        first_name,
-        last_name,
-        student_number,
-        position,
-        batch_id,
-        password,
-        date_created
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-      [
-        null,
-        null,
-        officer.first_name,
-        officer.last_name,
-        officer.student_number,
-        null,
-        officer.batch_id,
-        officer.password,
-      ],
+      `UPDATE student
+       SET position = 'Student', role = NULL,
+           can_add = 0, can_edit = 0, can_delete = 0, can_moderate = 0
+       WHERE student_id = ?`,
+      [officerId],
     );
-
-    await connection.query("DELETE FROM officer_role WHERE officer_id = ?", [
-      officerId,
-    ]);
-
-    await connection.query("DELETE FROM officer WHERE officer_id = ?", [
-      officerId,
-    ]);
+    await connection.query(
+      "UPDATE room_member SET member_type = 'student' WHERE member_id = ?",
+      [officerId],
+    );
 
     await connection.commit();
 
@@ -204,9 +184,9 @@ router.post("/", authenticateAdmin, async (req, res) => {
     await connection.beginTransaction();
 
     const batchId = await resolveBatchId(connection, year, section);
-    const [officerResult] = await connection.query(
-      `INSERT INTO officer (admin_id, student_number, position, batch_id, first_name, last_name, password, date_created)
-       VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+    await connection.query(
+      `INSERT INTO student (admin_id, student_number, position, batch_id, first_name, last_name, password, role, can_add, can_edit, can_delete, can_moderate, date_created)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
       [
         req.user.admin_id,
         student_number.trim(),
@@ -215,14 +195,6 @@ router.post("/", authenticateAdmin, async (req, res) => {
         first_name.trim(),
         last_name.trim(),
         await bcrypt.hash(password, 10),
-      ],
-    );
-
-    await connection.query(
-      `INSERT INTO officer_role (officer_id, role, can_add, can_edit, can_delete, can_moderate)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [
-        officerResult.insertId,
         role || "officer",
         permissions.can_add,
         permissions.can_edit,
@@ -277,9 +249,15 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
     const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
     const batchId = await resolveBatchId(connection, year, section);
 
+    const permissions = rolePermissions(role || "officer", {
+      can_add,
+      can_edit,
+      can_delete,
+      can_moderate,
+    });
     const updateSql = password
-      ? `UPDATE officer SET student_number = ?, position = ?, batch_id = ?, first_name = ?, last_name = ?, password = ? WHERE officer_id = ?`
-      : `UPDATE officer SET student_number = ?, position = ?, batch_id = ?, first_name = ?, last_name = ? WHERE officer_id = ?`;
+      ? `UPDATE student SET student_number = ?, position = ?, batch_id = ?, first_name = ?, last_name = ?, password = ?, role = ?, can_add = ?, can_edit = ?, can_delete = ?, can_moderate = ? WHERE student_id = ?`
+      : `UPDATE student SET student_number = ?, position = ?, batch_id = ?, first_name = ?, last_name = ?, role = ?, can_add = ?, can_edit = ?, can_delete = ?, can_moderate = ? WHERE student_id = ?`;
 
     const updateParams = password
       ? [
@@ -289,6 +267,11 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
           first_name.trim(),
           last_name.trim(),
           hashedPassword,
+          role || "officer",
+          permissions.can_add,
+          permissions.can_edit,
+          permissions.can_delete,
+          permissions.can_moderate,
           id,
         ]
       : [
@@ -297,6 +280,11 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
           batchId,
           first_name.trim(),
           last_name.trim(),
+          role || "officer",
+          permissions.can_add,
+          permissions.can_edit,
+          permissions.can_delete,
+          permissions.can_moderate,
           id,
         ];
 
@@ -305,47 +293,6 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
     if (officerResult.affectedRows === 0) {
       await connection.rollback();
       return res.status(404).json({ message: "Officer not found" });
-    }
-
-    const permissions = rolePermissions(role || "officer", {
-      can_add,
-      can_edit,
-      can_delete,
-      can_moderate,
-    });
-
-    const [existingRoleRows] = await connection.query(
-      "SELECT officer_role_id FROM officer_role WHERE officer_id = ? LIMIT 1",
-      [id],
-    );
-
-    if (existingRoleRows.length > 0) {
-      await connection.query(
-        `UPDATE officer_role
-         SET role = ?, can_add = ?, can_edit = ?, can_delete = ?, can_moderate = ?
-         WHERE officer_id = ?`,
-        [
-          role || "officer",
-          permissions.can_add,
-          permissions.can_edit,
-          permissions.can_delete,
-          permissions.can_moderate,
-          id,
-        ],
-      );
-    } else {
-      await connection.query(
-        `INSERT INTO officer_role (officer_id, role, can_add, can_edit, can_delete, can_moderate)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [
-          id,
-          role || "officer",
-          permissions.can_add,
-          permissions.can_edit,
-          permissions.can_delete,
-          permissions.can_moderate,
-        ],
-      );
     }
 
     await connection.commit();
@@ -369,11 +316,8 @@ router.delete("/:id", authenticateAdmin, async (req, res) => {
     const connection = db.promise();
     await connection.beginTransaction();
 
-    await connection.query("DELETE FROM officer_role WHERE officer_id = ?", [
-      id,
-    ]);
     const [officerResult] = await connection.query(
-      "DELETE FROM officer WHERE officer_id = ?",
+      "DELETE FROM student WHERE student_id = ? AND role IS NOT NULL",
       [id],
     );
 

@@ -9,8 +9,8 @@ router.get("/summary", authenticateOfficer, (req, res) => {
 
   const summaryQueries = [
     "SELECT COUNT(*) AS announcement_count FROM announcement",
-    "SELECT COUNT(*) AS officer_count FROM officer WHERE officer_id = ?",
-    "SELECT COUNT(*) AS review_count FROM student WHERE officer_id = ?",
+    "SELECT COUNT(*) AS officer_count FROM student WHERE student_id = ? AND role IS NOT NULL",
+    "SELECT COUNT(*) AS review_count FROM student WHERE batch_id = (SELECT batch_id FROM student WHERE student_id = ? AND role IS NOT NULL) AND role IS NULL",
   ];
 
   const queryPromises = summaryQueries.map((sql, index) => {

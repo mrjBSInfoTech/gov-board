@@ -123,7 +123,7 @@ const Login = () => {
     if (selectedModule === "Student") {
       navigate("/student/login");
     } else if (selectedModule === "Officer") {
-      navigate("/officer/login");
+      navigate("/student/login");
     } else if (selectedModule === "Admin") {
       navigate("/admin/login");
     }

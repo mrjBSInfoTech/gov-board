@@ -54,7 +54,7 @@ export const addStudent = async (formData) => {
   }
 };
 
-// PUT update officer account
+// PUT update student account
 export const updateStudent = async (id, formData) => {
   try {
     const res = await api.put(`/students/${id}`, formData);

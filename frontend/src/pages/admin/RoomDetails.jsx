@@ -76,7 +76,11 @@ export default function RoomDetails() {
           </Paper>
 
           <Box sx={{ mb: 3 }}>
-            <RoomTabs announcements={announcements} roomId={room.room_id} />
+            <RoomTabs
+              announcements={announcements}
+              roomId={room.room_id}
+              canManageMembers
+            />
           </Box>
 
           <Typography variant="h6" fontWeight="bold" sx={{ mb: 2 }}>

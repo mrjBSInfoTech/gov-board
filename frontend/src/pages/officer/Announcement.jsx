@@ -27,8 +27,8 @@ import {
   addAnnouncement,
   updateAnnouncement,
   deleteAnnouncement,
-  validateRoomCode,
 } from "../../api/officer/announcementAPI";
+import { fetchMyRoom } from "../../api/roomAPI";
 
 // Slide Transition for Snackbar
 function SlideTransition(props) {
@@ -95,6 +95,29 @@ export default function AnnouncementPage() {
       loadAnnouncements(joinedRoom.room_id);
     }
   }, [joinedRoom]);
+
+  useEffect(() => {
+    let active = true;
+    fetchMyRoom()
+      .then((room) => {
+        if (!active) return;
+        if (!room) {
+          setJoinedRoom(null);
+          localStorage.removeItem("joinedRoom");
+          return;
+        }
+        setJoinedRoom(room);
+        localStorage.setItem("joinedRoom", JSON.stringify(room));
+      })
+      .catch(() => {
+        if (!active) return;
+        setError("Unable to load your room. Please try again.");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleJoinRoom = async (e) => {
     e.preventDefault();
@@ -349,7 +372,11 @@ export default function AnnouncementPage() {
 
       {joinedRoom && (
         <Box sx={{ mb: 3 }}>
-          <RoomTabs announcements={announcements} roomId={joinedRoom.room_id} />
+          <RoomTabs
+            announcements={announcements}
+            roomId={joinedRoom.room_id}
+            canManageMembers
+          />
         </Box>
       )}
 

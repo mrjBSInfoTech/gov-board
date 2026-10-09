@@ -84,7 +84,7 @@ export default function OfficerLayout() {
     clearAuthData("officer");
 
     setTimeout(() => {
-      navigate("/officer/login", { replace: true });
+      navigate("/student/login", { replace: true });
       window.history.pushState(null, null, window.location.href);
       window.onpopstate = function () {
         window.history.pushState(null, null, window.location.href);

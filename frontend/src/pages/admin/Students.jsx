@@ -16,21 +16,20 @@ import {
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import SearchIcon from "@mui/icons-material/Search";
-import { fetchStudents, promoteStudent } from "../../api/admin/studentAPI";
+import {
+  fetchStudents,
+  updateStudent,
+} from "../../api/admin/studentAPI";
 import PeopleCardList from "../../components/common/PeopleCardList";
-import StudentPromoteDialog from "../../components/admin/Student/StudentPromoteDialog";
+import StudentForm from "../../components/admin/Student/StudentForm";
 
 export default function Students() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [selectedStudent, setSelectedStudent] = useState(null);
-  const [promoteDialogOpen, setPromoteDialogOpen] = useState(false);
-  const [promotePosition, setPromotePosition] = useState("");
-  const [promotionError, setPromotionError] = useState("");
-  const [requiresConfirmation, setRequiresConfirmation] = useState(false);
+  const [studentFormOpen, setStudentFormOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSection, setSelectedSection] = useState("All");
 
@@ -64,45 +63,16 @@ export default function Students() {
     loadStudents();
   }, []);
 
-  const handleOpenPromoteDialog = (student) => {
+  const handleOpenEdit = (student) => {
     setSelectedStudent(student);
-    setPromotePosition("");
-    setPromotionError("");
-    setRequiresConfirmation(false);
-    setPromoteDialogOpen(true);
+    setStudentFormOpen(true);
   };
 
-  const handleConfirmPromotion = async () => {
-    if (!selectedStudent || !promotePosition) {
-      setPromotionError("Please select a position first.");
-      return;
-    }
-
-    try {
-      setPromotionError("");
-      await promoteStudent(
-        selectedStudent.student_id,
-        promotePosition,
-        requiresConfirmation,
-      );
-      setPromoteDialogOpen(false);
-      await loadStudents();
-      setSelectedStudent(null);
-      setPromotePosition("");
-      setRequiresConfirmation(false);
-    } catch (error) {
-      const responseData = error?.response?.data;
-      const serverMessage =
-        responseData?.message || error.message || "Unable to promote student.";
-
-      if (responseData?.requiresConfirmation) {
-        setRequiresConfirmation(true);
-        setPromotionError(serverMessage);
-        return;
-      }
-
-      setPromotionError(serverMessage);
-    }
+  const handleSubmitStudent = async (formData) => {
+    await updateStudent(selectedStudent.student_id, formData);
+    setStudentFormOpen(false);
+    setSelectedStudent(null);
+    await loadStudents();
   };
 
   return (
@@ -198,17 +168,12 @@ export default function Students() {
                 </IconButton>
               </Tooltip>
               <Tooltip title="Edit">
-                <IconButton size="small" color="primary">
-                  <EditIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Promote">
                 <IconButton
                   size="small"
-                  color="success"
-                  onClick={() => handleOpenPromoteDialog(student)}
+                  color="primary"
+                  onClick={() => handleOpenEdit(student)}
                 >
-                  <TrendingUpIcon fontSize="small" />
+                  <EditIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
               <Tooltip title="Delete">
@@ -221,28 +186,16 @@ export default function Students() {
         />
       )}
 
-      <StudentPromoteDialog
-        open={promoteDialogOpen}
+      <StudentForm
+        open={studentFormOpen}
         handleClose={() => {
-          setPromoteDialogOpen(false);
+          setStudentFormOpen(false);
           setSelectedStudent(null);
-          setPromotionError("");
-          setPromotePosition("");
-          setRequiresConfirmation(false);
         }}
         selectedStudent={selectedStudent}
-        selectedPosition={promotePosition}
-        onPositionChange={(nextPosition) => {
-          setPromotePosition(nextPosition);
-          if (requiresConfirmation) {
-            setRequiresConfirmation(false);
-          }
-          setPromotionError("");
-        }}
-        onConfirm={handleConfirmPromotion}
-        error={promotionError}
-        requiresConfirmation={requiresConfirmation}
+        onSubmit={handleSubmitStudent}
       />
+
     </Box>
   );
 }
