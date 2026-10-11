@@ -1,12 +1,14 @@
 import { Box, Button } from "@mui/material";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
+import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 
 export default function RoomToolsLauncher({
   messageCount,
   memberCount,
   onOpenChatFiles,
   onOpenMembers,
+  onOpenCalendar,
 }) {
   const buttonStyles = {
     borderRadius: 2,
@@ -32,6 +34,14 @@ export default function RoomToolsLauncher({
         sx={buttonStyles}
       >
         Members ({memberCount})
+      </Button>
+      <Button
+        variant="outlined"
+        startIcon={<CalendarMonthIcon />}
+        onClick={onOpenCalendar}
+        sx={buttonStyles}
+      >
+        Calendar
       </Button>
     </Box>
   );

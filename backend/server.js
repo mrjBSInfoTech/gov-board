@@ -17,10 +17,12 @@ import officerDashboardRoutes from "./routes/officer/officerDashboard.js";
 import officerAnnouncementRoutes from "./routes/officer/officerAnnouncement.js";
 import officerModerateRoutes from "./routes/officer/officerModerate.js";
 import officerMemberRoutes from "./routes/officer/officerMember.js";
+import officerCalendarRoutes from "./routes/officer/officerCalendar.js";
 import roomRoutes from "./routes/room.js";
 // Routes (Student)
 import studentAuthenticateRoutes from "./routes/student/studentAuthenticate.js";
 import studentAnnouncementRoutes from "./routes/student/studentAnnouncement.js";
+import studentCalendarRoutes from "./routes/student/studentCalendar.js";
 
 dotenv.config();
 
@@ -53,10 +55,12 @@ app.use("/api/officer/dashboard", officerDashboardRoutes);
 app.use("/api/officer/announcements", officerAnnouncementRoutes);
 app.use("/api/officer/moderate", officerModerateRoutes);
 app.use("/api/officer/members", officerMemberRoutes);
+app.use("/api/officer/calendar", officerCalendarRoutes);
 app.use("/api/rooms", roomRoutes);
 // Routes (Student)
 app.use("/api/student/authenticate", studentAuthenticateRoutes);
 app.use("/api/student/announcements", studentAnnouncementRoutes);
+app.use("/api/student/calendar", studentCalendarRoutes);
 
 // Handle 404 (unknown routes)
 app.use((req, res) => {

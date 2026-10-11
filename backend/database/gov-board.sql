@@ -124,6 +124,20 @@ CREATE TABLE `room_member` (
   `date_joined` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- Calendar events created by officers in the Event Handlers workspace.
+CREATE TABLE `calendar_event` (
+  `event_id` int(11) NOT NULL,
+  `room_id` int(11) NOT NULL,
+  `title` varchar(200) NOT NULL,
+  `description` text DEFAULT NULL,
+  `start_at` datetime NOT NULL,
+  `end_at` datetime DEFAULT NULL,
+  `reminder_minutes` int(11) DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `date_created` timestamp NOT NULL DEFAULT current_timestamp(),
+  `date_updated` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 -- --------------------------------------------------------
 
 --
@@ -201,6 +215,13 @@ ALTER TABLE `room_member`
   ADD UNIQUE KEY `uq_room_member` (`room_id`,`member_type`,`member_id`),
   ADD KEY `idx_room_member_room` (`room_id`);
 
+-- Indexes for table `calendar_event`
+ALTER TABLE `calendar_event`
+  ADD PRIMARY KEY (`event_id`),
+  ADD KEY `idx_calendar_event_room` (`room_id`),
+  ADD KEY `idx_calendar_event_start` (`start_at`),
+  ADD KEY `idx_calendar_event_creator` (`created_by`);
+
 --
 -- Indexes for table `student`
 --
@@ -248,6 +269,10 @@ ALTER TABLE `room_message`
 ALTER TABLE `room_member`
   MODIFY `room_member_id` int(11) NOT NULL AUTO_INCREMENT;
 
+-- AUTO_INCREMENT for table `calendar_event`
+ALTER TABLE `calendar_event`
+  MODIFY `event_id` int(11) NOT NULL AUTO_INCREMENT;
+
 --
 -- AUTO_INCREMENT for table `student`
 --
@@ -281,6 +306,12 @@ ALTER TABLE `room_member`
 ALTER TABLE `student`
   ADD CONSTRAINT `fk_student_admin` FOREIGN KEY (`admin_id`) REFERENCES `admin` (`admin_id`) ON DELETE SET NULL,
   ADD CONSTRAINT `fk_student_batch` FOREIGN KEY (`batch_id`) REFERENCES `batch` (`batch_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- Constraints for table `calendar_event`
+ALTER TABLE `calendar_event`
+  ADD CONSTRAINT `calendar_event_creator_fk` FOREIGN KEY (`created_by`) REFERENCES `student` (`student_id`) ON DELETE CASCADE;
+ALTER TABLE `calendar_event`
+  ADD CONSTRAINT `calendar_event_room_fk` FOREIGN KEY (`room_id`) REFERENCES `room` (`room_id`) ON DELETE CASCADE;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

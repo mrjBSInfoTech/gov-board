@@ -7,6 +7,7 @@ import {
 import RoomChatFilesDialog from "./RoomChatFilesDialog";
 import RoomMembersDialog from "./RoomMembersDialog";
 import RoomToolsLauncher from "./RoomToolsLauncher";
+import CalendarEventsDialog from "./CalendarEventsDialog";
 import StudentPromoteDialog from "../admin/Student/StudentPromoteDialog";
 import AccountDemote from "../admin/Account/AccountDemote";
 import { promoteStudent } from "../../api/admin/studentAPI";
@@ -70,6 +71,7 @@ export default function RoomTabs({
   };
   const [chatFilesOpen, setChatFilesOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [tab, setTab] = useState(0);
   const [messages, setMessages] = useState([]);
   const [members, setMembers] = useState([]);
@@ -237,6 +239,13 @@ export default function RoomTabs({
           loadMembers();
           setMembersOpen(true);
         }}
+        onOpenCalendar={() => setCalendarOpen(true)}
+      />
+
+      <CalendarEventsDialog
+        open={calendarOpen}
+        onClose={() => setCalendarOpen(false)}
+        roomId={roomId}
       />
 
       <RoomChatFilesDialog
