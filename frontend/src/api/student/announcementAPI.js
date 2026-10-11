@@ -40,3 +40,12 @@ export const validateRoomCode = async (roomNumber) => {
     handleError(error);
   }
 };
+
+export const leaveRoom = async () => {
+  try {
+    const res = await api.delete("/room");
+    return res.data;
+  } catch (error) {
+    handleError(error);
+  }
+};

@@ -26,6 +26,7 @@ import {
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import CampaignIcon from "@mui/icons-material/Campaign";
+import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import GavelIcon from "@mui/icons-material/Gavel";
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
@@ -52,6 +53,7 @@ export default function OfficerLayout() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [position, setPosition] = useState("");
+  const [roomName, setRoomName] = useState("");
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -77,6 +79,26 @@ export default function OfficerLayout() {
     return () => {
       window.removeEventListener("officer-profile-updated", loadOfficerProfile);
       window.removeEventListener("storage", loadOfficerProfile);
+    };
+  }, []);
+
+  useEffect(() => {
+    const loadRoomName = () => {
+      const savedRoom = localStorage.getItem("joinedRoom");
+      try {
+        setRoomName(savedRoom ? JSON.parse(savedRoom).room_name || "" : "");
+      } catch (error) {
+        console.error("Unable to read saved officer room:", error);
+        setRoomName("");
+      }
+    };
+
+    loadRoomName();
+    window.addEventListener("room-membership-updated", loadRoomName);
+    window.addEventListener("storage", loadRoomName);
+    return () => {
+      window.removeEventListener("room-membership-updated", loadRoomName);
+      window.removeEventListener("storage", loadRoomName);
     };
   }, []);
 
@@ -122,12 +144,23 @@ export default function OfficerLayout() {
   const navigation = [
     { segment: "dashboard", title: "Dashboard", icon: <DashboardIcon /> },
     { segment: "account", title: "Account", icon: <AccountCircleIcon /> },
-    { segment: "announcement", title: "Announcement", icon: <CampaignIcon /> },
     {
-      segment: "governance",
-      title: "Governance",
-      icon: <AccountBalanceIcon />,
-      children: governanceChildren,
+      segment: "room",
+      title: roomName || "Room",
+      icon: <MeetingRoomIcon />,
+      children: [
+        {
+          segment: "announcement",
+          title: "Main",
+          icon: <CampaignIcon />,
+        },
+        {
+          segment: "governance",
+          title: "Governance",
+          icon: <AccountBalanceIcon />,
+          children: governanceChildren,
+        },
+      ],
     },
   ];
 

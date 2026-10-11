@@ -24,6 +24,7 @@ import AdminLogin from "../pages/admin/Login";
 // Student Pages
 import StudentHome from "../pages/student/Home";
 import StudentAnnouncement from "../pages/student/Announcement";
+import StudentAccount from "../pages/student/Account";
 import StudentLogin from "../pages/student/Login";
 import StudentRegister from "../pages/student/Register";
 
@@ -53,6 +54,7 @@ export default function AppRoutes() {
             <Route element={<StudentRoute />}>
               <Route element={<StudentLayout />}>
                 <Route path="home" element={<StudentHome />} />
+                <Route path="account" element={<StudentAccount />} />
                 <Route path="announcement" element={<StudentAnnouncement />} />
               </Route>
             </Route>
@@ -86,7 +88,27 @@ export default function AppRoutes() {
                 <Route index element={<Navigate to="dashboard" replace />} />
                 <Route path="dashboard" element={<OfficerDashboard />} />
                 <Route path="account" element={<OfficerAccount />} />
+                <Route
+                  path="room"
+                  element={<Navigate to="room/announcement" replace />}
+                />
+                <Route
+                  path="room/announcement"
+                  element={<OfficerAnnouncement />}
+                />
+                <Route
+                  path="room/governance/:section"
+                  element={<OfficerGovernanceSection />}
+                />
                 <Route path="announcement" element={<OfficerAnnouncement />} />
+                <Route
+                  path="announcement/overview"
+                  element={<OfficerAnnouncement />}
+                />
+                <Route
+                  path="announcement/:section"
+                  element={<OfficerGovernanceSection />}
+                />
                 <Route
                   path="moderate"
                   element={<Navigate to="governance/moderate" replace />}

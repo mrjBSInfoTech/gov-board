@@ -23,6 +23,7 @@ import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import CampaignIcon from "@mui/icons-material/Campaign";
+import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 import { adminDarkTheme } from "../theme/customTheme";
 import Nexus from "../assets/react.svg";
@@ -36,6 +37,7 @@ const Transition = React.forwardRef(function Transition(props, ref) {
 export default function StudentLayout() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [roomName, setRoomName] = useState("");
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -49,6 +51,29 @@ export default function StudentLayout() {
     loadStudentProfile();
     window.addEventListener("storage", loadStudentProfile);
     return () => window.removeEventListener("storage", loadStudentProfile);
+  }, []);
+
+  useEffect(() => {
+    const loadRoomName = () => {
+      const studentId = localStorage.getItem("student_student_id");
+      const savedRoom = studentId
+        ? localStorage.getItem(`studentJoinedRoom:${studentId}`)
+        : null;
+      try {
+        setRoomName(savedRoom ? JSON.parse(savedRoom).room_name || "" : "");
+      } catch (error) {
+        console.error("Unable to read saved student room:", error);
+        setRoomName("");
+      }
+    };
+
+    loadRoomName();
+    window.addEventListener("room-membership-updated", loadRoomName);
+    window.addEventListener("storage", loadRoomName);
+    return () => {
+      window.removeEventListener("room-membership-updated", loadRoomName);
+      window.removeEventListener("storage", loadRoomName);
+    };
   }, []);
 
   const handleLogout = () => {
@@ -67,10 +92,11 @@ export default function StudentLayout() {
 
   const navigation = [
     { segment: "home", title: "Dashboard", icon: <DashboardIcon /> },
+    { segment: "account", title: "Account", icon: <AccountCircleIcon /> },
     {
       segment: "announcement",
-      title: "Announcements",
-      icon: <CampaignIcon />,
+      title: roomName || "Room",
+      icon: <MeetingRoomIcon />,
     },
   ];
 

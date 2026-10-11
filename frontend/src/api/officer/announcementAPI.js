@@ -54,6 +54,16 @@ export const validateRoomCode = async (roomCode) => {
   }
 };
 
+export const leaveRoom = async () => {
+  try {
+    const res = await api.delete("/officer/announcements/room");
+    return res.data;
+  } catch (error) {
+    console.error("Error leaving room:", error);
+    handleError(error);
+  }
+};
+
 // Fetch single announcement by ID
 export const fetchAnnouncementById = async (id) => {
   try {

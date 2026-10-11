@@ -1,9 +1,9 @@
 export const GOVERNANCE_SECTIONS = [
-  { key: "audit", title: "Audit" },
-  { key: "budget", title: "Budget" },
-  { key: "funds", title: "Funds" },
   { key: "event-handlers", title: "Event Handlers" },
   { key: "moderate", title: "Moderate" },
+  { key: "budget", title: "Budget" },
+  { key: "funds", title: "Funds" },
+  { key: "audit", title: "Audit" },
 ];
 
 const ALL_SECTIONS = GOVERNANCE_SECTIONS.map(({ key }) => key);

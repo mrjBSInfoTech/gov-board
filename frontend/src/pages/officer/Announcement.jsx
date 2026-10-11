@@ -21,9 +21,12 @@ import AnnouncementCard from "../../components/officer/Announcement/Announcement
 import AnnouncementForm from "../../components/officer/Announcement/AnnouncementForm";
 import AnnouncementDelete from "../../components/officer/Announcement/AnnouncementDelete";
 import RoomTabs from "../../components/room/RoomTabs";
+import RoomLeaveDialog from "../../components/room/RoomLeaveDialog";
 
 import {
   fetchAnnouncements,
+  validateRoomCode,
+  leaveRoom,
   addAnnouncement,
   updateAnnouncement,
   deleteAnnouncement,
@@ -57,6 +60,8 @@ export default function AnnouncementPage() {
   // Action loading states
   const [formLoading, setFormLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
+  const [leaveLoading, setLeaveLoading] = useState(false);
 
   // Snackbar notification
   const [snackbar, setSnackbar] = useState({
@@ -104,10 +109,12 @@ export default function AnnouncementPage() {
         if (!room) {
           setJoinedRoom(null);
           localStorage.removeItem("joinedRoom");
+          window.dispatchEvent(new Event("room-membership-updated"));
           return;
         }
         setJoinedRoom(room);
         localStorage.setItem("joinedRoom", JSON.stringify(room));
+        window.dispatchEvent(new Event("room-membership-updated"));
       })
       .catch(() => {
         if (!active) return;
@@ -129,6 +136,7 @@ export default function AnnouncementPage() {
       const room = await validateRoomCode(roomCodeInput.trim());
       setJoinedRoom(room);
       localStorage.setItem("joinedRoom", JSON.stringify(room));
+      window.dispatchEvent(new Event("room-membership-updated"));
       showSnackbar(`Joined room: ${room.room_name}`, "success");
     } catch (err) {
       setError(err.message || "Invalid room code.");
@@ -137,11 +145,22 @@ export default function AnnouncementPage() {
     }
   };
 
-  const handleLeaveRoom = () => {
-    setJoinedRoom(null);
-    localStorage.removeItem("joinedRoom");
-    setAnnouncements([]);
-    setRoomCodeInput("");
+  const handleLeaveRoom = async () => {
+    setLeaveLoading(true);
+    try {
+      await leaveRoom();
+      setLeaveDialogOpen(false);
+      setJoinedRoom(null);
+      localStorage.removeItem("joinedRoom");
+      setAnnouncements([]);
+      setRoomCodeInput("");
+      window.dispatchEvent(new Event("room-membership-updated"));
+      showSnackbar("You left the room and are now a student.", "success");
+    } catch (err) {
+      setError(err.message || "Unable to leave room.");
+    } finally {
+      setLeaveLoading(false);
+    }
   };
 
   // Handlers for Form
@@ -257,7 +276,7 @@ export default function AnnouncementPage() {
             <Button
               variant="outlined"
               color="error"
-              onClick={handleLeaveRoom}
+              onClick={() => setLeaveDialogOpen(true)}
               sx={{
                 borderRadius: 2,
                 textTransform: "none",
@@ -282,6 +301,12 @@ export default function AnnouncementPage() {
             >
               Add Announcement
             </Button>
+            <RoomLeaveDialog
+              open={leaveDialogOpen}
+              onClose={() => setLeaveDialogOpen(false)}
+              onConfirm={handleLeaveRoom}
+              loading={leaveLoading}
+            />
           </Box>
         )}
       </Box>

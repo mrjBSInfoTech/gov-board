@@ -72,6 +72,28 @@ router.get("/room/validate/:roomNumber", authenticateStudent, (req, res) => {
   });
 });
 
+router.delete("/room", authenticateStudent, (req, res) => {
+  const studentId = req.user.student_id;
+  if (!studentId) {
+    return res.status(403).json({ error: "Unable to identify student" });
+  }
+
+  db.query(
+    "DELETE FROM room_member WHERE member_type = 'student' AND member_id = ?",
+    [studentId],
+    (err, result) => {
+      if (err) {
+        console.error("Student leave room error:", err);
+        return res.status(500).json({ error: "Unable to leave room" });
+      }
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: "Room membership not found" });
+      }
+      res.json({ message: "You left the room." });
+    },
+  );
+});
+
 // GET all announcements for a room
 router.get("/", authenticateStudent, (req, res) => {
   const { roomId } = req.query;

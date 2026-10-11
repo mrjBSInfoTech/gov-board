@@ -10,6 +10,66 @@ import { authenticateOfficer } from "../../middleware/officerAuthMiddleware.js";
 
 const router = express.Router();
 
+router.get("/account", authenticateOfficer, (req, res) => {
+  db.query(
+    "SELECT first_name, last_name, student_number FROM student WHERE student_id = ? AND role IS NOT NULL LIMIT 1",
+    [req.user.officer_id],
+    (err, rows) => {
+      if (err) {
+        console.error("Officer account read error:", err);
+        return res.status(500).json({ message: "Unable to load account." });
+      }
+      if (!rows.length) return res.status(404).json({ message: "Account not found." });
+      res.json(rows[0]);
+    },
+  );
+});
+
+router.put("/account", authenticateOfficer, (req, res) => {
+  const firstName = req.body.first_name?.trim();
+  const lastName = req.body.last_name?.trim();
+  const studentNumber = req.body.student_number?.trim();
+  if (!firstName || !lastName || !studentNumber) {
+    return res.status(400).json({ message: "First name, last name, and student number are required." });
+  }
+  db.query(
+    `UPDATE student SET first_name = ?, last_name = ?, student_number = ?
+     WHERE student_id = ? AND role IS NOT NULL`,
+    [firstName, lastName, studentNumber, req.user.officer_id],
+    (err) => {
+      if (err) {
+        if (err.code === "ER_DUP_ENTRY") return res.status(409).json({ message: "Student number already exists." });
+        console.error("Officer account update error:", err);
+        return res.status(500).json({ message: "Unable to update account." });
+      }
+      res.json({ first_name: firstName, last_name: lastName, student_number: studentNumber });
+    },
+  );
+});
+
+router.put("/account/password", authenticateOfficer, (req, res) => {
+  const { current_password: currentPassword, new_password: newPassword } = req.body;
+  if (!currentPassword || !newPassword || newPassword.length < 8) {
+    return res.status(400).json({ message: "Current password and a new password of at least 8 characters are required." });
+  }
+  db.query("SELECT password FROM student WHERE student_id = ? AND role IS NOT NULL LIMIT 1", [req.user.officer_id], (err, rows) => {
+    if (err) {
+      console.error("Officer password lookup error:", err);
+      return res.status(500).json({ message: "Unable to change password." });
+    }
+    if (!rows.length || !bcrypt.compareSync(currentPassword, rows[0].password)) {
+      return res.status(400).json({ message: "Current password is incorrect." });
+    }
+    db.query("UPDATE student SET password = ? WHERE student_id = ?", [bcrypt.hashSync(newPassword, 10), req.user.officer_id], (updateErr) => {
+      if (updateErr) {
+        console.error("Officer password update error:", updateErr);
+        return res.status(500).json({ message: "Unable to change password." });
+      }
+      res.json({ message: "Password changed successfully." });
+    });
+  });
+});
+
 // LOGIN
 router.post("/login", async (req, res) => {
   const { student_number, password } = req.body;

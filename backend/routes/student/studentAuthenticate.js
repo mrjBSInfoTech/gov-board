@@ -2,8 +2,79 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import db from "../../database/db.js";
+import { authenticateStudent } from "../../middleware/studentAuthMiddleware.js";
 
 const router = express.Router();
+
+const loadAccount = (req, res, callback) => {
+  db.query(
+    `SELECT first_name, last_name, student_number
+     FROM student WHERE student_id = ? LIMIT 1`,
+    [req.user.student_id],
+    callback,
+  );
+};
+
+router.get("/account", authenticateStudent, (req, res) => {
+  loadAccount(req, res, (err, rows) => {
+    if (err) {
+      console.error("Student account read error:", err);
+      return res.status(500).json({ message: "Unable to load account." });
+    }
+    if (!rows.length) return res.status(404).json({ message: "Account not found." });
+    res.json(rows[0]);
+  });
+});
+
+router.put("/account", authenticateStudent, (req, res) => {
+  const firstName = req.body.first_name?.trim();
+  const lastName = req.body.last_name?.trim();
+  const studentNumber = req.body.student_number?.trim();
+  if (!firstName || !lastName || !studentNumber) {
+    return res.status(400).json({ message: "First name, last name, and student number are required." });
+  }
+
+  db.query(
+    `UPDATE student SET first_name = ?, last_name = ?, student_number = ?
+     WHERE student_id = ?`,
+    [firstName, lastName, studentNumber, req.user.student_id],
+    (err) => {
+      if (err) {
+        if (err.code === "ER_DUP_ENTRY") {
+          return res.status(409).json({ message: "Student number already exists." });
+        }
+        console.error("Student account update error:", err);
+        return res.status(500).json({ message: "Unable to update account." });
+      }
+      res.json({ first_name: firstName, last_name: lastName, student_number: studentNumber });
+    },
+  );
+});
+
+router.put("/account/password", authenticateStudent, (req, res) => {
+  const { current_password: currentPassword, new_password: newPassword } = req.body;
+  if (!currentPassword || !newPassword || newPassword.length < 8) {
+    return res.status(400).json({ message: "Current password and a new password of at least 8 characters are required." });
+  }
+
+  db.query("SELECT password FROM student WHERE student_id = ? LIMIT 1", [req.user.student_id], (err, rows) => {
+    if (err) {
+      console.error("Student password lookup error:", err);
+      return res.status(500).json({ message: "Unable to change password." });
+    }
+    if (!rows.length || !bcrypt.compareSync(currentPassword, rows[0].password)) {
+      return res.status(400).json({ message: "Current password is incorrect." });
+    }
+    const password = bcrypt.hashSync(newPassword, 10);
+    db.query("UPDATE student SET password = ? WHERE student_id = ?", [password, req.user.student_id], (updateErr) => {
+      if (updateErr) {
+        console.error("Student password update error:", updateErr);
+        return res.status(500).json({ message: "Unable to change password." });
+      }
+      res.json({ message: "Password changed successfully." });
+    });
+  });
+});
 
 // REGISTER
 // Table: student (student_id, first_name, last_name, student_number, batch_id, password, date_created)

@@ -96,31 +96,77 @@ router.get("/room/validate/:roomNumber", authenticateOfficer, (req, res) => {
     }
 
     const officerId = req.user.officer_id;
-    db.query(
+    const connection = db.promise();
+    connection.beginTransaction()
+      .then(() => connection.query(
+        "DELETE FROM room_member WHERE member_type = 'officer' AND member_id = ?",
+        [officerId],
+      ))
+      .then(() => connection.query(
+        `UPDATE student
+         SET position = 'Student', role = NULL,
+             can_add = 0, can_edit = 0, can_delete = 0, can_moderate = 0
+         WHERE student_id = ?`,
+        [officerId],
+      ))
+      .then(() => connection.query(
+        `INSERT INTO room_member (room_id, member_type, member_id)
+         VALUES (?, 'student', ?)
+         ON DUPLICATE KEY UPDATE member_type = 'student'`,
+        [results[0].room_id, officerId],
+      ))
+      .then(() => connection.commit())
+      .then(() => res.json(results[0]))
+      .catch(async (error) => {
+        try {
+          await connection.rollback();
+        } catch (rollbackError) {
+          console.error("Room switch rollback error:", rollbackError);
+        }
+        console.error("Room switch error:", error);
+        return res.status(500).json({ error: "Unable to join room" });
+      });
+  });
+});
+
+// Leave the current room and return the officer account to a regular student.
+router.delete("/room", authenticateOfficer, (req, res) => {
+  const officerId = req.user.officer_id;
+  const connection = db.promise();
+
+  connection.beginTransaction()
+    .then(() => connection.query(
       "DELETE FROM room_member WHERE member_type = 'officer' AND member_id = ?",
       [officerId],
-      (removeErr) => {
-        if (removeErr) {
-          console.error("Previous room membership cleanup error:", removeErr);
-          return res.status(500).json({ error: "Unable to join room" });
-        }
-
-        db.query(
-          `INSERT INTO room_member (room_id, member_type, member_id)
-           VALUES (?, 'officer', ?)
-           ON DUPLICATE KEY UPDATE member_id = VALUES(member_id)`,
-          [results[0].room_id, officerId],
-          (membershipErr) => {
-            if (membershipErr) {
-              console.error("Room membership update error:", membershipErr);
-              return res.status(500).json({ error: "Unable to join room" });
-            }
-            res.json(results[0]);
-          },
-        );
-      },
-    );
-  });
+    ))
+    .then(([result]) => {
+      if (result.affectedRows === 0) {
+        const error = new Error("Room membership not found");
+        error.statusCode = 404;
+        throw error;
+      }
+      return connection.query(
+        `UPDATE student
+         SET position = 'Student', role = NULL,
+             can_add = 0, can_edit = 0, can_delete = 0, can_moderate = 0
+         WHERE student_id = ?`,
+        [officerId],
+      );
+    })
+    .then(() => connection.commit())
+    .then(() => res.json({ message: "You left the room and are now a student." }))
+    .catch(async (error) => {
+      try {
+        await connection.rollback();
+      } catch (rollbackError) {
+        console.error("Officer leave rollback error:", rollbackError);
+      }
+      if (error.statusCode === 404) {
+        return res.status(404).json({ error: "Room membership not found" });
+      }
+      console.error("Officer leave room error:", error);
+      return res.status(500).json({ error: "Unable to leave room" });
+    });
 });
 
 // 🔍 Get single announcement by ID
