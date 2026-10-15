@@ -27,12 +27,9 @@ import {
   Visibility,
   VisibilityOff,
 } from "@mui/icons-material";
-import {
-  loginUser,
-  refreshSession,
-} from "../../api/student/studentAuthenticationAPI";
+import { loginUser } from "../../api/student/studentAuthenticationAPI";
 import Icon from "../../assets/react.svg";
-import { hasValidToken, setToken } from "../../../utils/auth";
+import { isAuthenticated, setAuthSection, setToken } from "../../../utils/auth";
 
 function SlideTransition(props) {
   return <Slide {...props} direction="up" />;
@@ -51,35 +48,13 @@ const Login = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   useEffect(() => {
-    const existingToken =
-      localStorage.getItem("officer_token") ||
-      localStorage.getItem("student_token");
-    if (!existingToken || !hasValidToken(existingToken)) return;
+    const section = ["officer", "student"].find(isAuthenticated);
+    if (!section) return;
 
-    refreshSession(existingToken)
-      .then((data) => {
-        const authType = data.is_officer ? "officer" : "student";
-        localStorage.removeItem("student_token");
-        localStorage.removeItem("officer_token");
-        setToken(authType, data.token);
-        localStorage.setItem(`${authType}_student_id`, data.student_id || "");
-        localStorage.setItem(`${authType}_student_number`, data.student_number || "");
-        localStorage.setItem(`${authType}_first_name`, data.first_name || "");
-        localStorage.setItem(`${authType}_last_name`, data.last_name || "");
-
-        if (data.is_officer) {
-          localStorage.setItem("officer_officer_id", data.officer_id || "");
-          localStorage.setItem("officer_position", data.position || "Officer");
-        }
-
-        navigate(data.is_officer ? "/officer/dashboard" : "/student/home", {
-          replace: true,
-        });
-      })
-      .catch(() => {
-        localStorage.removeItem("officer_token");
-        localStorage.removeItem("student_token");
-      });
+    setAuthSection(section);
+    navigate(section === "officer" ? "/officer/dashboard" : "/student/home", {
+      replace: true,
+    });
   }, [navigate]);
 
 

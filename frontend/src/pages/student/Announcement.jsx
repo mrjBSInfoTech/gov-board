@@ -129,7 +129,7 @@ export default function AnnouncementPage() {
       window.dispatchEvent(new Event("room-membership-updated"));
       showSnackbar(`Joined room: ${room.room_name}`, "success");
     } catch (err) {
-      setError(err.message || "Invalid room code.");
+      showSnackbar(err.message || "Invalid room code.", "error");
     } finally {
       setRoomLoading(false);
     }
@@ -377,13 +377,13 @@ export default function AnnouncementPage() {
         open={snackbar.open}
         autoHideDuration={4000}
         onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         TransitionComponent={SlideTransition}
       >
         <Alert
           onClose={handleCloseSnackbar}
           severity={snackbar.severity}
-          sx={{ width: "100%" }}
+          sx={{ width: "100%", color: "white" }}
           variant="filled"
         >
           {snackbar.message}
