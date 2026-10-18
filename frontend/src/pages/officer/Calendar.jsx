@@ -177,6 +177,10 @@ export default function Calendar() {
 
   const handleSubmit = async (submitEvent) => {
     submitEvent.preventDefault();
+    if (form.date < todayKey) {
+      setErrorMessage("Events can only be scheduled for today or a future date.");
+      return;
+    }
     setSaving(true);
     setErrorMessage("");
     const payload = {
@@ -497,6 +501,7 @@ export default function Calendar() {
                   type="date"
                   value={form.date}
                   onChange={updateForm("date")}
+                  inputProps={{ min: todayKey }}
                   InputLabelProps={{ shrink: true }}
                   required
                   fullWidth

@@ -1,6 +1,7 @@
 import db from "../../database/db.js";
 import { logAudit } from "./auditLogger.js";
 import { logOfficerAudit } from "../officer/officerAuditLogger.js";
+import { awardLoginXp } from "./roomLevelService.js";
 
 export const auditLoginActivity = (officerOnly = false) => (req, res, next) => {
   res.once("finish", async () => {
@@ -24,6 +25,9 @@ export const auditLoginActivity = (officerOnly = false) => (req, res, next) => {
           actor: account ? account.student_number : `Unknown ${officerOnly ? "officer" : "student"}`,
           role: officerOnly ? "Officer" : "Student",
         });
+      }
+      if (res.statusCode < 400 && account?.student_id) {
+        await awardLoginXp(account.student_id);
       }
     } catch (error) {
       console.error("Unable to record sign-in activity:", error.message);

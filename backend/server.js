@@ -23,6 +23,7 @@ import officerAuditRoutes from "./routes/officer/officerAudit.js";
 import { auditOfficerActivity } from "./utils/officer/officerAuditLogger.js";
 import { auditStudentActivity } from "./utils/student/studentActivityLogger.js";
 import roomRoutes from "./routes/room.js";
+import roomLevelRoutes from "./routes/roomLevel.js";
 // Routes (Student)
 import studentAuthenticateRoutes from "./routes/student/studentAuthenticate.js";
 import studentAnnouncementRoutes from "./routes/student/studentAnnouncement.js";
@@ -65,6 +66,7 @@ app.use("/api/officer/moderate", officerModerateRoutes);
 app.use("/api/officer/members", officerMemberRoutes);
 app.use("/api/officer/calendar", officerCalendarRoutes);
 app.use("/api/rooms", auditStudentActivity, auditOfficerActivity, roomRoutes);
+app.use("/api/rooms", roomLevelRoutes);
 // Routes (Student)
 app.use("/api/student", auditStudentActivity);
 app.use("/api/student/authenticate", studentAuthenticateRoutes);

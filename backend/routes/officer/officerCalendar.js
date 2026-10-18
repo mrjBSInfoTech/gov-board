@@ -5,6 +5,10 @@ import { authenticateOfficer } from "../../middleware/officerAuthMiddleware.js";
 const router = express.Router();
 const DATE_TIME_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 const getOfficerId = (req) => req.user?.officer_id || req.user?.id;
+const getDateKey = (date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate(),
+  ).padStart(2, "0")}`;
 
 const getOfficerRoomId = (req, requestedRoomId, callback) => {
   const roomId = requestedRoomId ? Number(requestedRoomId) : null;
@@ -33,6 +37,9 @@ const validateEvent = ({ title, start_at, end_at, reminder_minutes }) => {
   if (!title || !title.trim()) return "Event title is required.";
   if (!start_at || !DATE_TIME_PATTERN.test(start_at)) {
     return "A valid event start date and time are required.";
+  }
+  if (start_at.slice(0, 10) < getDateKey(new Date())) {
+    return "Events can only be scheduled for today or a future date.";
   }
   if (end_at && !DATE_TIME_PATTERN.test(end_at)) return "The event end date and time is invalid.";
   if (end_at && new Date(end_at.replace(" ", "T")) < new Date(start_at.replace(" ", "T"))) {
@@ -109,6 +116,7 @@ router.post("/", authenticateOfficer, (req, res) => {
             console.error("Created calendar event lookup error:", selectErr);
             return res.status(500).json({ message: "Event was created but could not be loaded." });
           }
+          req.auditInformation = `Added Event "${title.trim()}"`;
           res.status(201).json(rows[0]);
         });
       },
@@ -146,6 +154,7 @@ router.put("/:id", authenticateOfficer, (req, res) => {
         if (!result.affectedRows) {
           return res.status(404).json({ message: "Event not found or you cannot edit it." });
         }
+        req.auditInformation = `Edited Event "${title.trim()}"`;
         res.json({ message: "Calendar event updated." });
       },
     );
@@ -157,17 +166,32 @@ router.delete("/:id", authenticateOfficer, (req, res) => {
     if (roomError) return res.status(500).json({ message: "Unable to identify the room." });
     if (!roomId) return res.status(403).json({ message: "You are not a member of this room." });
     db.query(
-      "DELETE FROM calendar_event WHERE event_id = ? AND room_id = ? AND created_by = ?",
+      `SELECT title FROM calendar_event
+        WHERE event_id = ? AND room_id = ? AND created_by = ?`,
       [req.params.id, roomId, getOfficerId(req)],
-      (err, result) => {
-        if (err) {
-          console.error("Calendar event deletion error:", err);
+      (lookupError, rows) => {
+        if (lookupError) {
+          console.error("Calendar event lookup before deletion error:", lookupError);
           return res.status(500).json({ message: "Unable to delete calendar event." });
         }
-        if (!result.affectedRows) {
+        if (!rows.length) {
           return res.status(404).json({ message: "Event not found or you cannot delete it." });
         }
-        res.json({ message: "Calendar event deleted." });
+        db.query(
+          "DELETE FROM calendar_event WHERE event_id = ? AND room_id = ? AND created_by = ?",
+          [req.params.id, roomId, getOfficerId(req)],
+          (err, result) => {
+            if (err) {
+              console.error("Calendar event deletion error:", err);
+              return res.status(500).json({ message: "Unable to delete calendar event." });
+            }
+            if (!result.affectedRows) {
+              return res.status(404).json({ message: "Event not found or you cannot delete it." });
+            }
+            req.auditInformation = `Deleted Event "${rows[0].title}"`;
+            res.json({ message: "Calendar event deleted." });
+          },
+        );
       },
     );
   });
