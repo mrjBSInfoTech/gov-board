@@ -29,7 +29,7 @@ import {
 } from "@mui/icons-material";
 import { loginUser } from "../../api/admin/adminAuthenticationAPI";
 import Icon from "../../assets/react.svg";
-import { clearAuthData, isAuthenticated, setAuthSection, setToken } from "../../../utils/auth";
+import { clearAuthData, setToken } from "../../../utils/auth";
 
 function SlideTransition(props) {
   return <Slide {...props} direction="up" />;
@@ -46,13 +46,6 @@ const Login = () => {
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-
-  useEffect(() => {
-    if (isAuthenticated("admin")) {
-      setAuthSection("admin");
-      navigate("/admin/dashboard", { replace: true });
-    }
-  }, [navigate]);
 
   useEffect(() => {
     const handleKeyDown = (event) => {

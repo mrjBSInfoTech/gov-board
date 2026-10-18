@@ -9,6 +9,7 @@ import multer from "multer";
 // Routes (Admin)
 import adminAuthenticateRoutes from "./routes/admin/adminAuthentication.js";
 import adminAccountRoutes from "./routes/admin/adminAccount.js";
+import adminAuditRoutes from "./routes/admin/adminAudit.js";
 import adminRoomRoutes from "./routes/admin/adminRoom.js";
 import adminStudentRoutes from "./routes/admin/adminStudent.js";
 // Routes (Officer)
@@ -18,10 +19,14 @@ import officerAnnouncementRoutes from "./routes/officer/officerAnnouncement.js";
 import officerModerateRoutes from "./routes/officer/officerModerate.js";
 import officerMemberRoutes from "./routes/officer/officerMember.js";
 import officerCalendarRoutes from "./routes/officer/officerCalendar.js";
+import officerAuditRoutes from "./routes/officer/officerAudit.js";
+import { auditOfficerActivity } from "./utils/officer/officerAuditLogger.js";
+import { auditStudentActivity } from "./utils/student/studentActivityLogger.js";
 import roomRoutes from "./routes/room.js";
 // Routes (Student)
 import studentAuthenticateRoutes from "./routes/student/studentAuthenticate.js";
 import studentAnnouncementRoutes from "./routes/student/studentAnnouncement.js";
+import studentAuditRoutes from "./routes/student/studentAudit.js";
 import studentCalendarRoutes from "./routes/student/studentCalendar.js";
 
 dotenv.config();
@@ -49,18 +54,23 @@ app.use("/api/admin/authenticate", adminAuthenticateRoutes);
 app.use("/api/admin/accounts", adminAccountRoutes);
 app.use("/api/admin/rooms", adminRoomRoutes);
 app.use("/api/admin/students", adminStudentRoutes);
+app.use("/api/admin/audit", adminAuditRoutes);
 // Routes (Officer)
+app.use("/api/officer", auditOfficerActivity);
+app.use("/api/officer/audit", officerAuditRoutes);
 app.use("/api/officer/authenticate", officerAuthenticateRoutes);
 app.use("/api/officer/dashboard", officerDashboardRoutes);
 app.use("/api/officer/announcements", officerAnnouncementRoutes);
 app.use("/api/officer/moderate", officerModerateRoutes);
 app.use("/api/officer/members", officerMemberRoutes);
 app.use("/api/officer/calendar", officerCalendarRoutes);
-app.use("/api/rooms", roomRoutes);
+app.use("/api/rooms", auditStudentActivity, auditOfficerActivity, roomRoutes);
 // Routes (Student)
+app.use("/api/student", auditStudentActivity);
 app.use("/api/student/authenticate", studentAuthenticateRoutes);
 app.use("/api/student/announcements", studentAnnouncementRoutes);
 app.use("/api/student/calendar", studentCalendarRoutes);
+app.use("/api/student/audit", studentAuditRoutes);
 
 // Handle 404 (unknown routes)
 app.use((req, res) => {

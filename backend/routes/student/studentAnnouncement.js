@@ -1,6 +1,7 @@
 import express from "express";
 import db from "../../database/db.js";
 import { authenticateStudent } from "../../middleware/studentAuthMiddleware.js";
+import { logStudentAudit } from "../../utils/student/studentAuditLogger.js";
 
 const router = express.Router();
 
@@ -62,6 +63,12 @@ router.get("/room/validate/:roomNumber", authenticateStudent, (req, res) => {
                   return res.status(500).json({ error: "Unable to join room" });
                 }
 
+                void logStudentAudit(studentId, {
+                  action: "Join room",
+                  role: "Student",
+                  status: "SUCCESS",
+                  information: `Joined room ${results[0].room_id}`,
+                });
                 res.json(results[0]);
               },
             );

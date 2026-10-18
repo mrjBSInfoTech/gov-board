@@ -3,6 +3,8 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import db from "../../database/db.js";
 import { authenticateStudent } from "../../middleware/studentAuthMiddleware.js";
+import { logStudentAudit } from "../../utils/student/studentAuditLogger.js";
+import { auditLoginActivity } from "../../utils/shared/loginActivityLogger.js";
 
 const router = express.Router();
 
@@ -46,6 +48,8 @@ router.put("/account", authenticateStudent, (req, res) => {
         console.error("Student account update error:", err);
         return res.status(500).json({ message: "Unable to update account." });
       }
+      void logStudentAudit(req.user.student_id, { action: "Update",
+        role: "Student", status: "SUCCESS", information: "Student updated account details" });
       res.json({ first_name: firstName, last_name: lastName, student_number: studentNumber });
     },
   );
@@ -71,6 +75,8 @@ router.put("/account/password", authenticateStudent, (req, res) => {
         console.error("Student password update error:", updateErr);
         return res.status(500).json({ message: "Unable to change password." });
       }
+      void logStudentAudit(req.user.student_id, { action: "Update",
+        role: "Student", status: "SUCCESS", information: "Student changed password" });
       res.json({ message: "Password changed successfully." });
     });
   });
@@ -186,10 +192,11 @@ router.post("/register", (req, res) => {
 });
 
 // LOGIN
-router.post("/login", (req, res) => {
+router.post("/login", auditLoginActivity(), (req, res) => {
   const { student_number, password } = req.body;
 
   if (!student_number || !password) {
+    req.loginFailureReason = "Student number and password are required";
     return res
       .status(400)
       .json({ message: "Student number and password are required" });
@@ -206,12 +213,14 @@ router.post("/login", (req, res) => {
 
   db.query(sql, [student_number.trim()], (err, results) => {
     if (err) {
+      req.loginFailureReason = "Database error while checking login credentials";
       console.error("DB error:", err);
       return res.status(500).json({ message: "Database error" });
     }
 
     const user = results[0];
     if (!user) {
+      req.loginFailureReason = "Invalid student number";
       return res
         .status(401)
         .json({ message: "Invalid student number or password" });
@@ -220,6 +229,7 @@ router.post("/login", (req, res) => {
     const isMatch = bcrypt.compareSync(password, user.password);
 
     if (!isMatch) {
+      req.loginFailureReason = "Invalid password";
       return res
         .status(401)
         .json({ message: "Invalid student number or password" });

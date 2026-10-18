@@ -7,6 +7,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { authenticateOfficer } from "../../middleware/officerAuthMiddleware.js";
+import { auditLoginActivity } from "../../utils/shared/loginActivityLogger.js";
 
 const router = express.Router();
 
@@ -71,10 +72,11 @@ router.put("/account/password", authenticateOfficer, (req, res) => {
 });
 
 // LOGIN
-router.post("/login", async (req, res) => {
+router.post("/login", auditLoginActivity(true), async (req, res) => {
   const { student_number, password } = req.body;
 
   if (!student_number || !password) {
+    req.loginFailureReason = "Student number and password are required";
     return res
       .status(400)
       .json({ message: "Student number and password are required" });
@@ -93,12 +95,14 @@ router.post("/login", async (req, res) => {
 
   db.query(sql, [student_number.trim()], (err, results) => {
     if (err) {
+      req.loginFailureReason = "Database error while checking login credentials";
       console.error("DB error:", err);
       return res.status(500).json({ message: "Database error" });
     }
 
     const officer = results[0];
     if (!officer) {
+      req.loginFailureReason = "Invalid student number or account is not an officer";
       return res
         .status(401)
         .json({ message: "Invalid student number or password" });
@@ -112,6 +116,7 @@ router.post("/login", async (req, res) => {
 
     const isMatch = bcrypt.compareSync(password, officer.password);
     if (!isMatch) {
+      req.loginFailureReason = "Invalid password";
       return res
         .status(401)
         .json({ message: "Invalid student number or password" });

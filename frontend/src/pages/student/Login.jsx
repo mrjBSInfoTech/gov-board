@@ -29,7 +29,7 @@ import {
 } from "@mui/icons-material";
 import { loginUser } from "../../api/student/studentAuthenticationAPI";
 import Icon from "../../assets/react.svg";
-import { isAuthenticated, setAuthSection, setToken } from "../../../utils/auth";
+import { setToken } from "../../../utils/auth";
 
 function SlideTransition(props) {
   return <Slide {...props} direction="up" />;
@@ -46,17 +46,6 @@ const Login = () => {
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-
-  useEffect(() => {
-    const section = ["officer", "student"].find(isAuthenticated);
-    if (!section) return;
-
-    setAuthSection(section);
-    navigate(section === "officer" ? "/officer/dashboard" : "/student/home", {
-      replace: true,
-    });
-  }, [navigate]);
-
 
   useEffect(() => {
     const handleKeyDown = (event) => {

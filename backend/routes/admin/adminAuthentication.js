@@ -2,6 +2,7 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import db from "../../database/db.js";
+import { logAudit } from "../../utils/shared/auditLogger.js";
 
 const router = express.Router();
 
@@ -10,6 +11,10 @@ router.post("/login", (req, res) => {
   const { username, password } = req.body;
 
   if (!username || !password) {
+    void logAudit({
+      action: "Login", actor: username || "Unknown admin", role: "Admin",
+      status: "Failed", information: "Username and password are required",
+    });
     return res
       .status(400)
       .json({ message: "Username and password are required" });
@@ -23,16 +28,44 @@ router.post("/login", (req, res) => {
 
   db.query(sql, [username.trim()], (err, results) => {
     if (err) {
+      void logAudit({
+        action: "Login", actor: username, role: "Admin", status: "Failed",
+        information: "Database error while checking login credentials",
+      });
       console.error("DB error:", err);
       return res.status(500).json({ message: "Database error" });
     }
 
-    const user = results[0];
+    const user = results.length > 0 ? results[0] : null;
+
     if (!user) {
+      logAudit({
+        action: "Login",
+        actor: username,
+        role: "Admin",
+        status: "Failed",
+        information: "Invalid username",
+      });
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
     const isMatch = bcrypt.compareSync(password, user.password);
+
+    if (!isMatch) {
+      logAudit({
+        action: "Login",
+        actor: username,
+        role: "Admin",
+        status: "Failed",
+        information: "Invalid password",
+      });
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    if (!user) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
 
     if (!isMatch) {
       return res.status(401).json({ message: "Invalid credentials" });
@@ -49,6 +82,13 @@ router.post("/login", (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: "10d" },
     );
+
+    logAudit({
+      action: "Login",
+      actor: user.username,
+      status: "Success",
+      information: "Admin logged in",
+    });
 
     res.json({
       token,

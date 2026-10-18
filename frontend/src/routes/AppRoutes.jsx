@@ -28,12 +28,14 @@ import StudentAccount from "../pages/student/Account";
 import StudentLogin from "../pages/student/Login";
 import StudentRegister from "../pages/student/Register";
 
+
 // Officer Pages
 import OfficerDashboard from "../pages/officer/Dashboard";
 import OfficerAnnouncement from "../pages/officer/Announcement";
 import OfficerModerate from "../pages/officer/Moderate";
 import OfficerAccount from "../pages/officer/Account";
 import OfficerGovernanceSection from "../pages/officer/GovernanceSection";
+import OfficerAudit from "../pages/officer/Audit";
 
 const theme = createTheme();
 
@@ -88,6 +90,7 @@ export default function AppRoutes() {
                 <Route index element={<Navigate to="dashboard" replace />} />
                 <Route path="dashboard" element={<OfficerDashboard />} />
                 <Route path="account" element={<OfficerAccount />} />
+                <Route path="audit" element={<OfficerAudit />} />
                 <Route
                   path="room"
                   element={<Navigate to="room/announcement" replace />}

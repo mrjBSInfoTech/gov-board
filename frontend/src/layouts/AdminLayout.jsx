@@ -20,6 +20,7 @@ import { ThemeProvider, CssBaseline, useMediaQuery } from "@mui/material";
 import { adminLightTheme, adminDarkTheme } from "../theme/customTheme";
 import Nexus from "../assets/react.svg";
 import { clearAuthData } from "../../utils/auth";
+import { recordAdminLogout } from "../api/admin/auditLogAPI";
 
 // Icons
 import DashboardIcon from "@mui/icons-material/Dashboard";
@@ -103,6 +104,11 @@ export default function AdminLayout() {
 
   const handleLogout = async () => {
     setOpen(false);
+    try {
+      await recordAdminLogout();
+    } catch (error) {
+      console.error("Unable to record logout:", error);
+    }
     clearAuthData("admin");
 
     setTimeout(() => {

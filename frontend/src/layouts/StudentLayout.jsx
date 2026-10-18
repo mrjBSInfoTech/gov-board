@@ -29,6 +29,7 @@ import { adminDarkTheme } from "../theme/customTheme";
 import Nexus from "../assets/react.svg";
 import { logoutUser } from "../api/student/studentAuthenticationAPI";
 import { clearAuthData } from "../../utils/auth";
+import { recordStudentLogout } from "../api/student/auditLogAPI";
 
 const Transition = React.forwardRef(function Transition(props, ref) {
   return <Slide direction="up" ref={ref} {...props} />;
@@ -76,7 +77,12 @@ export default function StudentLayout() {
     };
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await recordStudentLogout();
+    } catch (error) {
+      console.error("Unable to record logout:", error);
+    }
     logoutUser();
     clearAuthData("student");
     setOpen(false);

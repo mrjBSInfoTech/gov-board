@@ -17,6 +17,7 @@ import { ThemeProvider, CssBaseline, useMediaQuery } from "@mui/material";
 import { adminLightTheme, adminDarkTheme } from "../theme/customTheme";
 import Nexus from "../assets/react.svg";
 import { clearAuthData } from "../../utils/auth";
+import { recordOfficerLogout } from "../api/officer/auditLogAPI";
 import {
   GOVERNANCE_SECTIONS,
   getGovernanceAccess,
@@ -111,6 +112,11 @@ export default function OfficerLayout() {
 
   const handleLogout = async () => {
     setOpen(false);
+    try {
+      await recordOfficerLogout();
+    } catch (error) {
+      console.error("Unable to record officer logout:", error);
+    }
     clearAuthData("officer");
 
     setTimeout(() => {
@@ -134,6 +140,8 @@ export default function OfficerLayout() {
       moderate: <GavelIcon />,
     };
 
+
+
     return {
       segment: key,
       title,
@@ -144,6 +152,7 @@ export default function OfficerLayout() {
   const navigation = [
     { segment: "dashboard", title: "Dashboard", icon: <DashboardIcon /> },
     { segment: "account", title: "Account", icon: <AccountCircleIcon /> },
+    { segment: "audit", title: "Audit logs", icon: <HistoryIcon /> },
     {
       segment: "room",
       title: roomName || "Room",
