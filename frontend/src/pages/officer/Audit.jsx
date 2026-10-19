@@ -23,10 +23,12 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import SearchIcon from "@mui/icons-material/Search";
 import { fetchAuditLogs } from "../../api/officer/auditLogAPI";
+import { fetchMyRoom } from "../../api/roomAPI";
 import { useTheme } from "@mui/material/styles";
 
 export default function Audit() {
   const theme = useTheme();
+  const [room, setRoom] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -34,6 +36,35 @@ export default function Audit() {
   const [date, setDate] = useState(null);
   const [period, setPeriod] = useState("all");
   const [visibleCount, setVisibleCount] = useState(50);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadRoom = async () => {
+      try {
+        const currentRoom = await fetchMyRoom();
+        if (!active) return;
+
+        setRoom(currentRoom || null);
+        if (currentRoom?.room_id) {
+          localStorage.setItem("joinedRoom", JSON.stringify(currentRoom));
+          await loadFunds(currentRoom.room_id);
+        } else {
+          setLoading(false);
+          setFunds([]);
+        }
+      } catch (roomError) {
+        if (!active) return;
+        setLoading(false);
+        setError(roomError.message || "Unable to load your room.");
+      }
+    };
+
+    loadRoom();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -101,7 +132,9 @@ export default function Audit() {
         <Typography variant="overline" color="primary" sx={{ fontWeight: 700 }}>
           Oversight
         </Typography>
-        <Typography variant="h4">Audit trail</Typography>
+        <Typography variant="h4">
+          Audit Logs
+        </Typography>
         <Typography color="text.secondary">
           Review student and officer activity in your year and section.
         </Typography>

@@ -47,21 +47,27 @@ const Transition = React.forwardRef(function Transition(props, ref) {
   );
 });
 
-function AccountsNavigationItem({ item }) {
-  const location = useLocation();
-  const [expanded, setExpanded] = useState(true);
+function CollapsibleNavigationItem({ item }) {
+  const storageKey = `admin-sidebar-expanded:${item.segment}`;
+  const [expanded, setExpanded] = useState(() => localStorage.getItem(storageKey) === "true");
 
-  useEffect(() => {
-    if (location.pathname.startsWith("/admin/account")) {
-      setExpanded(true);
-    }
-  }, [location.pathname]);
+  const toggleExpanded = () => {
+    setExpanded((current) => {
+      const next = !current;
+      localStorage.setItem(storageKey, String(next));
+      return next;
+    });
+  };
+
+  if (!item.children) {
+    return <DashboardSidebarPageItem item={item} />;
+  }
 
   return (
     <DashboardSidebarPageItem
       item={item}
       expanded={expanded}
-      onClick={() => setExpanded((current) => !current)}
+      onClick={toggleExpanded}
     />
   );
 }
@@ -335,13 +341,7 @@ export default function AdminLayout() {
             toolbarAccount: CustomHeader,
             sidebarFooter: SidebarFooter,
           }}
-          renderPageItem={(item) =>
-            item.segment === "account" ? (
-              <AccountsNavigationItem item={item} />
-            ) : (
-              <DashboardSidebarPageItem item={item} />
-            )
-          }
+          renderPageItem={(item) => <CollapsibleNavigationItem item={item} />}
           sx={{
             backgroundColor: theme.palette.background.default,
             "& .MuiDrawer-paper": {

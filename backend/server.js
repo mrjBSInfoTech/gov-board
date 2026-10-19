@@ -17,6 +17,8 @@ import officerAuthenticateRoutes from "./routes/officer/officerAuthentication.js
 import officerDashboardRoutes from "./routes/officer/officerDashboard.js";
 import officerAnnouncementRoutes from "./routes/officer/officerAnnouncement.js";
 import officerModerateRoutes from "./routes/officer/officerModerate.js";
+import officerBudgetRoutes from "./routes/officer/officerBudget.js";
+import officerFundRoutes from "./routes/officer/officerFund.js";
 import officerMemberRoutes from "./routes/officer/officerMember.js";
 import officerCalendarRoutes from "./routes/officer/officerCalendar.js";
 import officerAuditRoutes from "./routes/officer/officerAudit.js";
@@ -63,6 +65,8 @@ app.use("/api/officer/authenticate", officerAuthenticateRoutes);
 app.use("/api/officer/dashboard", officerDashboardRoutes);
 app.use("/api/officer/announcements", officerAnnouncementRoutes);
 app.use("/api/officer/moderate", officerModerateRoutes);
+app.use("/api/officer/budget", officerBudgetRoutes);
+app.use("/api/officer/fund", officerFundRoutes);
 app.use("/api/officer/members", officerMemberRoutes);
 app.use("/api/officer/calendar", officerCalendarRoutes);
 app.use("/api/rooms", auditStudentActivity, auditOfficerActivity, roomRoutes);

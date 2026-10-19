@@ -4,7 +4,10 @@ import { AppProvider } from "@toolpad/core";
 import Backdrop from "@mui/material/Backdrop";
 import Button from "@mui/material/Button";
 import Box from "@mui/material/Box";
-import { DashboardLayout as MuiDashboardLayout } from "@toolpad/core";
+import {
+  DashboardLayout as MuiDashboardLayout,
+  DashboardSidebarPageItem,
+} from "@toolpad/core";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -49,6 +52,31 @@ const Transition = React.forwardRef(function Transition(props, ref) {
     />
   );
 });
+
+function CollapsibleNavigationItem({ item }) {
+  const storageKey = `officer-sidebar-expanded:${item.segment}`;
+  const [expanded, setExpanded] = useState(() => localStorage.getItem(storageKey) === "true");
+
+  const toggleExpanded = () => {
+    setExpanded((current) => {
+      const next = !current;
+      localStorage.setItem(storageKey, String(next));
+      return next;
+    });
+  };
+
+  if (!item.children) {
+    return <DashboardSidebarPageItem item={item} />;
+  }
+
+  return (
+    <DashboardSidebarPageItem
+      item={item}
+      expanded={expanded}
+      onClick={toggleExpanded}
+    />
+  );
+}
 
 export default function OfficerLayout() {
   const [firstName, setFirstName] = useState("");
@@ -152,7 +180,6 @@ export default function OfficerLayout() {
   const navigation = [
     { segment: "dashboard", title: "Dashboard", icon: <DashboardIcon /> },
     { segment: "account", title: "Account", icon: <AccountCircleIcon /> },
-    { segment: "audit", title: "Audit logs", icon: <HistoryIcon /> },
     {
       segment: "room",
       title: roomName || "Room",
@@ -362,6 +389,7 @@ export default function OfficerLayout() {
             toolbarAccount: CustomHeader,
             sidebarFooter: SidebarFooter,
           }}
+          renderPageItem={(item) => <CollapsibleNavigationItem item={item} />}
           sx={{
             backgroundColor: theme.palette.background.default,
             "& .MuiDrawer-paper": {

@@ -8,7 +8,9 @@ import HistoryOutlinedIcon from "@mui/icons-material/HistoryOutlined";
 import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
 import { canAccessGovernanceSection } from "../../utils/governanceAccess";
 import Calendar from "./Calendar";
+import Fund from "./Fund";
 import Audit from "./Audit";
+import Budget from "./Budget";
 
 const SECTIONS = {
   audit: {
@@ -51,8 +53,14 @@ export default function GovernanceSection() {
   if (sectionKey === "event-handlers") {
     return <Calendar />;
   }
+  if (sectionKey === "budget") {
+    return <Budget />;
+  }
   if (sectionKey === "audit") {
     return <Audit />;
+  }
+  if (sectionKey === "funds") {
+    return <Fund />;
   }
 
   const SectionIcon = section.icon;

@@ -450,15 +450,6 @@ export default function AnnouncementPage() {
                 ? "Try adjusting your search query."
                 : "Click the button below to create your first announcement."}
             </Typography>
-            {!searchTerm && (
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={handleOpenAddForm}
-              >
-                Add Announcement
-              </Button>
-            )}
           </Paper>
         ) : (
           /* Centered Feed of Announcements */
