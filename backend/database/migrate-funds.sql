@@ -34,6 +34,6 @@ CREATE TABLE IF NOT EXISTS `fund_contributions` (
     FOREIGN KEY (`fund_id`) REFERENCES `funds` (`fund_id`)
     ON UPDATE CASCADE ON DELETE RESTRICT,
   CONSTRAINT `fk_contrib_student`
-    FOREIGN KEY (`student_id`) REFERENCES `students` (`student_id`)
+    FOREIGN KEY (`student_id`) REFERENCES `student` (`student_id`)
     ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
