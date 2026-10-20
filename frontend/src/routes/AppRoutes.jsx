@@ -27,6 +27,7 @@ import StudentAnnouncement from "../pages/student/Announcement";
 import StudentAccount from "../pages/student/Account";
 import StudentLogin from "../pages/student/Login";
 import StudentRegister from "../pages/student/Register";
+import Quest from "../pages/Quest";
 
 // Officer Pages
 import OfficerDashboard from "../pages/officer/Dashboard";
@@ -56,6 +57,7 @@ export default function AppRoutes() {
               <Route element={<StudentLayout />}>
                 <Route path="home" element={<StudentHome />} />
                 <Route path="account" element={<StudentAccount />} />
+                <Route path="quest" element={<Quest />} />
                 <Route path="announcement" element={<StudentAnnouncement />} />
               </Route>
             </Route>
@@ -89,6 +91,7 @@ export default function AppRoutes() {
                 <Route index element={<Navigate to="dashboard" replace />} />
                 <Route path="dashboard" element={<OfficerDashboard />} />
                 <Route path="account" element={<OfficerAccount />} />
+                <Route path="quest" element={<Quest />} />
                 <Route path="audit" element={<OfficerAudit />} />
                 <Route
                   path="room"

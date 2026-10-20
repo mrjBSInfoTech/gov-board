@@ -5,6 +5,7 @@ import db from "../../database/db.js";
 import { authenticateStudent } from "../../middleware/studentAuthMiddleware.js";
 import { logStudentAudit } from "../../utils/student/studentAuditLogger.js";
 import { auditLoginActivity } from "../../utils/shared/loginActivityLogger.js";
+import { awardLoginXp } from "../../utils/shared/roomLevelService.js";
 
 const router = express.Router();
 
@@ -255,23 +256,31 @@ router.post("/login", auditLoginActivity(), (req, res) => {
       { expiresIn: "10d" },
     );
 
-    res.json({
-      token,
-      student_id: user.student_id,
-      first_name: user.first_name,
-      last_name: user.last_name,
-      student_number: user.student_number,
-      position: user.position || "Student",
-      year: user.year,
-      section: user.section,
-      officer_id: user.role ? user.student_id : undefined,
-      role: user.role || null,
-      can_add: user.can_add || 0,
-      can_edit: user.can_edit || 0,
-      can_delete: user.can_delete || 0,
-      can_moderate: user.can_moderate || 0,
-      is_officer: Boolean(user.role),
-    });
+    (async () => {
+      try {
+        await awardLoginXp(user.student_id);
+      } catch (error) {
+        console.error("Unable to award daily login quest XP:", error);
+      }
+
+      res.json({
+        token,
+        student_id: user.student_id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        student_number: user.student_number,
+        position: user.position || "Student",
+        year: user.year,
+        section: user.section,
+        officer_id: user.role ? user.student_id : undefined,
+        role: user.role || null,
+        can_add: user.can_add || 0,
+        can_edit: user.can_edit || 0,
+        can_delete: user.can_delete || 0,
+        can_moderate: user.can_moderate || 0,
+        is_officer: Boolean(user.role),
+      });
+    })();
   });
 });
 

@@ -57,6 +57,32 @@ export const fetchMyRoom = async () => {
   }
 };
 
+export const fetchRoomQuests = async (roomId) => {
+  if (!Number.isSafeInteger(Number(roomId)) || Number(roomId) < 1) {
+    throw new Error("A valid room is required to load quests.");
+  }
+
+  try {
+    const response = await api.get(`/${roomId}/quests`);
+    return response.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+
+export const fetchRoomLevel = async (roomId) => {
+  if (!Number.isSafeInteger(Number(roomId)) || Number(roomId) < 1) {
+    throw new Error("A valid room is required to load room EXP.");
+  }
+
+  try {
+    const response = await api.get(`/${roomId}/level`);
+    return response.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+
 export const sendRoomMessage = async (roomId, message, senderName, media) => {
   try {
     const formData = new FormData();
@@ -65,6 +91,9 @@ export const sendRoomMessage = async (roomId, message, senderName, media) => {
     if (media) formData.append("media", media);
 
     const response = await api.post(`/${roomId}/messages`, formData);
+    window.dispatchEvent(
+      new CustomEvent("room-xp-updated", { detail: { roomId } }),
+    );
     return response.data;
   } catch (error) {
     handleError(error);

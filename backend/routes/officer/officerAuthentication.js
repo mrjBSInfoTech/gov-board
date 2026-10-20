@@ -8,6 +8,7 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { authenticateOfficer } from "../../middleware/officerAuthMiddleware.js";
 import { auditLoginActivity } from "../../utils/shared/loginActivityLogger.js";
+import { awardLoginXp } from "../../utils/shared/roomLevelService.js";
 
 const router = express.Router();
 
@@ -137,21 +138,29 @@ router.post("/login", auditLoginActivity(true), async (req, res) => {
       { expiresIn: "8h" },
     );
 
-    res.json({
-      token,
-      officer_id: officer.officer_id,
-      student_number: officer.student_number,
-      position: officer.position || "Officer",
-      year: resolvedYear,
-      section: resolvedSection,
-      first_name: officer.first_name,
-      last_name: officer.last_name,
-      role: officer.role,
-      can_add: officer.can_add,
-      can_edit: officer.can_edit,
-      can_delete: officer.can_delete,
-      can_moderate: officer.can_moderate,
-    });
+    (async () => {
+      try {
+        await awardLoginXp(officer.officer_id);
+      } catch (error) {
+        console.error("Unable to award daily login quest XP:", error);
+      }
+
+      res.json({
+        token,
+        officer_id: officer.officer_id,
+        student_number: officer.student_number,
+        position: officer.position || "Officer",
+        year: resolvedYear,
+        section: resolvedSection,
+        first_name: officer.first_name,
+        last_name: officer.last_name,
+        role: officer.role,
+        can_add: officer.can_add,
+        can_edit: officer.can_edit,
+        can_delete: officer.can_delete,
+        can_moderate: officer.can_moderate,
+      });
+    })();
   });
 });
 

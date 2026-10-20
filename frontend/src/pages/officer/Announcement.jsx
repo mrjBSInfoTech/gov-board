@@ -32,6 +32,7 @@ import {
   deleteAnnouncement,
 } from "../../api/officer/announcementAPI";
 import { fetchMyRoom } from "../../api/roomAPI";
+import RoomLevelBar from "../../components/room/RoomLevelBar";
 
 // Slide Transition for Snackbar
 function SlideTransition(props) {
@@ -368,6 +369,14 @@ export default function AnnouncementPage() {
 
       {/* Search Bar */}
       {joinedRoom && (
+        <RoomLevelBar
+          key={joinedRoom.room_id}
+          roomId={joinedRoom.room_id}
+          roomName={joinedRoom.room_name}
+        />
+      )}
+
+      {joinedRoom && (
         <Paper
           elevation={0}
           sx={{
@@ -398,6 +407,7 @@ export default function AnnouncementPage() {
       {joinedRoom && (
         <Box sx={{ mb: 3 }}>
           <RoomTabs
+            key={joinedRoom.room_id}
             announcements={announcements}
             roomId={joinedRoom.room_id}
             canManageMembers

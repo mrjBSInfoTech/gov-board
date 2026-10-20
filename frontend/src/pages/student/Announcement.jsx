@@ -22,6 +22,7 @@ import {
   leaveRoom,
 } from "../../api/student/announcementAPI";
 import { fetchMyRoom } from "../../api/roomAPI";
+import RoomLevelBar from "../../components/room/RoomLevelBar";
 import RoomLeaveDialog from "../../components/room/RoomLeaveDialog";
 
 // Slide Transition for Snackbar
@@ -277,6 +278,12 @@ export default function AnnouncementPage() {
         </Box>
       ) : (
         <>
+          <RoomLevelBar
+            key={joinedRoom.room_id}
+            roomId={joinedRoom.room_id}
+            roomName={joinedRoom.room_name}
+          />
+
           <Paper
             elevation={0}
             sx={{
@@ -306,6 +313,7 @@ export default function AnnouncementPage() {
 
           <Box sx={{ mb: 3 }}>
             <RoomTabs
+              key={joinedRoom.room_id}
               announcements={announcements}
               roomId={joinedRoom.room_id}
             />

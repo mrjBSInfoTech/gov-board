@@ -1,12 +1,13 @@
 import db from "../../database/db.js";
+import {
+  getQuestDateKey,
+  getRoomLevelProgress,
+} from "./roomQuestRules.js";
 
 const XP_VALUES = {
   login: 10,
-  chat: 5,
-  calendar_view: 2,
+  chat: 15,
 };
-
-const getDateKey = () => new Date().toISOString().slice(0, 10);
 
 const ensureRoomLevel = async (roomId) => {
   await db.promise().query(
@@ -19,36 +20,45 @@ const ensureRoomLevel = async (roomId) => {
 
 export async function awardRoomXp(roomId, memberId, activityType) {
   const exp = XP_VALUES[activityType];
-  if (!Number.isInteger(roomId) || !Number.isInteger(memberId) || !exp) {
-    return false;
+  if (!Number.isSafeInteger(roomId) || roomId < 1 ||
+      !Number.isSafeInteger(memberId) || memberId < 1 || !exp) {
+    throw new Error("A valid room, member, and quest activity are required.");
   }
 
-  const activityKey = getDateKey();
+  const activityKey = getQuestDateKey();
+  await ensureRoomLevel(roomId);
+  const [insertResult] = await db.promise().query(
+    `INSERT IGNORE INTO room_xp_activity
+      (room_id, member_id, activity_type, activity_key, exp_awarded)
+     VALUES (?, ?, ?, ?, ?)`,
+    [roomId, memberId, activityType, activityKey, exp],
+  );
 
-  try {
-    await ensureRoomLevel(roomId);
-    const [insertResult] = await db.promise().query(
-      `INSERT IGNORE INTO room_xp_activity
-        (room_id, member_id, activity_type, activity_key, exp_awarded)
-       VALUES (?, ?, ?, ?, ?)`,
-      [roomId, memberId, activityType, activityKey, exp],
-    );
-
-    if (insertResult.affectedRows) {
-      await db.promise().query(
-        `UPDATE room_level
-            SET level = FLOOR(SQRT((total_exp + ?) / 100)) + 1,
-                total_exp = total_exp + ?
-          WHERE room_id = ?`,
-        [exp, exp, roomId],
-      );
-    }
-
-    return true;
-  } catch (error) {
-    console.error("Room XP award error:", error.message);
-    return false;
+  if (!insertResult.affectedRows) {
+    return { awarded: false, exp: 0 };
   }
+
+  await db.promise().query(
+    `UPDATE room_level
+        SET total_exp = total_exp + ?
+      WHERE room_id = ?`,
+    [exp, roomId],
+  );
+  const [rows] = await db.promise().query(
+    "SELECT total_exp FROM room_level WHERE room_id = ?",
+    [roomId],
+  );
+  if (!rows.length) {
+    throw new Error("Room level record disappeared after XP was awarded.");
+  }
+
+  const progress = getRoomLevelProgress(rows[0].total_exp);
+  await db.promise().query(
+    "UPDATE room_level SET level = ? WHERE room_id = ?",
+    [progress.level, roomId],
+  );
+
+  return { awarded: true, exp };
 }
 
 export async function awardLoginXp(memberId) {
@@ -66,12 +76,53 @@ export async function awardLoginXp(memberId) {
 export async function getRoomLevel(roomId) {
   await ensureRoomLevel(roomId);
   const [rows] = await db.promise().query(
-    `SELECT room_id, total_exp, level,
-            (level - 1) * (level - 1) * 100 AS current_level_exp,
-            level * level * 100 AS next_level_exp
-       FROM room_level WHERE room_id = ?`,
+    "SELECT room_id, total_exp FROM room_level WHERE room_id = ?",
     [roomId],
   );
 
-  return rows[0] || null;
+  if (!rows.length) return null;
+  return {
+    room_id: rows[0].room_id,
+    total_exp: Number(rows[0].total_exp),
+    ...getRoomLevelProgress(rows[0].total_exp),
+  };
+}
+
+export async function getRoomQuests(roomId, memberId) {
+  const dayKey = getQuestDateKey();
+  const [activityRows] = await db.promise().query(
+    `SELECT activity_type, exp_awarded
+       FROM room_xp_activity
+      WHERE room_id = ? AND member_id = ? AND activity_key = ?
+        AND activity_type IN ('login', 'chat')`,
+    [roomId, memberId, dayKey],
+  );
+  const completed = new Map(
+    activityRows.map((row) => [row.activity_type, Number(row.exp_awarded)]),
+  );
+
+  return {
+    day_key: dayKey,
+    reset_time: "04:00",
+    time_zone: process.env.QUEST_TIME_ZONE || "Asia/Manila",
+    room_level: await getRoomLevel(roomId),
+    tasks: [
+      {
+        id: "login",
+        title: "Daily Login",
+        description: "Log in once each day to earn experience for your room.",
+        exp: XP_VALUES.login,
+        completed: completed.has("login"),
+        exp_awarded: completed.get("login") || 0,
+      },
+      {
+        id: "chat",
+        title: "Room Chat",
+        description: "Send at least one message in your room each day.",
+        exp: XP_VALUES.chat,
+        completed: completed.has("chat"),
+        exp_awarded: completed.get("chat") || 0,
+      },
+    ],
+  };
 }

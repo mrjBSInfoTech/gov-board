@@ -77,6 +77,7 @@ export default function RoomDetails() {
 
           <Box sx={{ mb: 3 }}>
             <RoomTabs
+              key={room.room_id}
               announcements={announcements}
               roomId={room.room_id}
               canManageMembers

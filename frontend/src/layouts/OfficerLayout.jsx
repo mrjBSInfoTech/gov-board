@@ -29,6 +29,7 @@ import {
 // Icons
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import DashboardIcon from "@mui/icons-material/Dashboard";
+import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import CampaignIcon from "@mui/icons-material/Campaign";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import GavelIcon from "@mui/icons-material/Gavel";
@@ -180,6 +181,7 @@ export default function OfficerLayout() {
   const navigation = [
     { segment: "dashboard", title: "Dashboard", icon: <DashboardIcon /> },
     { segment: "account", title: "Account", icon: <AccountCircleIcon /> },
+    { segment: "quest", title: "Quest", icon: <EmojiEventsIcon /> },
     {
       segment: "room",
       title: roomName || "Room",

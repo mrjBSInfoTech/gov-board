@@ -23,6 +23,7 @@ import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import CampaignIcon from "@mui/icons-material/Campaign";
+import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 import { adminDarkTheme } from "../theme/customTheme";
@@ -99,6 +100,7 @@ export default function StudentLayout() {
   const navigation = [
     { segment: "home", title: "Dashboard", icon: <DashboardIcon /> },
     { segment: "account", title: "Account", icon: <AccountCircleIcon /> },
+    { segment: "quest", title: "Quest", icon: <EmojiEventsIcon /> },
     {
       segment: "announcement",
       title: roomName || "Room",
