@@ -1,10 +1,14 @@
 import axios from "axios";
+import { API_BASE_URL } from "../apiBaseURL";
+import { handleAdminAuthFailure } from "./adminAuthInterceptor";
 
 // Create an Axios instance
 const api = axios.create({
-  baseURL: "http://localhost:5000/api",
+  baseURL: `${API_BASE_URL}/api`,
   timeout: 5000,
 });
+
+handleAdminAuthFailure(api);
 
 // Interceptor to attach Authorization header
 api.interceptors.request.use((config) => {

@@ -16,6 +16,7 @@ import CampaignOutlinedIcon from "@mui/icons-material/CampaignOutlined";
 import GroupsOutlinedIcon from "@mui/icons-material/GroupsOutlined";
 import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
 import ArrowForwardOutlinedIcon from "@mui/icons-material/ArrowForwardOutlined";
+import { API_BASE_URL } from "../../api/apiBaseURL";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -38,7 +39,7 @@ export default function Dashboard() {
         }
 
         const response = await fetch(
-          "http://localhost:5000/api/officer/dashboard/summary",
+          `${API_BASE_URL}/api/officer/dashboard/summary`,
           {
             headers: { Authorization: `Bearer ${token}` },
           },

@@ -1,7 +1,8 @@
 import axios from "axios";
+import { API_BASE_URL } from "../apiBaseURL";
 
 const api = axios.create({
-  baseURL: "http://localhost:5000/api/officer/authenticate",
+  baseURL: `${API_BASE_URL}/api/officer/authenticate`,
   headers: { "Content-Type": "application/json" },
   timeout: 5000,
 });

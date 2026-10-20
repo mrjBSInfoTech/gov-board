@@ -15,6 +15,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import PeopleCardList from "../../components/common/PeopleCardList";
 import { Navigate } from "react-router-dom";
 import { canAccessGovernanceSection } from "../../utils/governanceAccess";
+import { API_BASE_URL } from "../../api/apiBaseURL";
 
 export default function Moderate() {
   const position = localStorage.getItem("officer_position");
@@ -37,7 +38,7 @@ export default function Moderate() {
         }
 
         const response = await fetch(
-          "http://localhost:5000/api/officer/moderate/same-section",
+          `${API_BASE_URL}/api/officer/moderate/same-section`,
           {
             headers: { Authorization: `Bearer ${token}` },
           },

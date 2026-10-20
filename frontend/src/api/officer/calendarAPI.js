@@ -1,7 +1,8 @@
 import axios from "axios";
+import { API_BASE_URL } from "../apiBaseURL";
 
 const api = axios.create({
-  baseURL: "http://localhost:5000/api/officer/calendar",
+  baseURL: `${API_BASE_URL}/api/officer/calendar`,
   headers: { "Content-Type": "application/json" },
 });
 

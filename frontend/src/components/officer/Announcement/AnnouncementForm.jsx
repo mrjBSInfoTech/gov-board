@@ -19,13 +19,14 @@ import CloseIcon from "@mui/icons-material/Close";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ImageIcon from "@mui/icons-material/Image";
+import { API_BASE_URL } from "../../../api/apiBaseURL";
 
 // Animation transition
 const Transition = React.forwardRef(function Transition(props, ref) {
   return <Slide direction="up" ref={ref} {...props} />;
 });
 
-const IMAGE_BASE_URL = "http://localhost:5000/uploads/officer/uploadAnnouncement";
+const IMAGE_BASE_URL = `${API_BASE_URL}/uploads/officer/uploadAnnouncement`;
 
 function AnnouncementForm({ open, handleClose, initialData, onSubmit, loading }) {
   const isEdit = Boolean(initialData?.announcement_id);

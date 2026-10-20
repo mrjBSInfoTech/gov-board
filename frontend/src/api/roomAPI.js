@@ -1,7 +1,8 @@
 import axios from "axios";
+import { API_BASE_URL } from "./apiBaseURL";
 
 const api = axios.create({
-  baseURL: "http://localhost:5000/api/rooms",
+  baseURL: `${API_BASE_URL}/api/rooms`,
 });
 
 api.interceptors.request.use((config) => {
@@ -56,12 +57,14 @@ export const fetchMyRoom = async () => {
   }
 };
 
-export const sendRoomMessage = async (roomId, message, senderName) => {
+export const sendRoomMessage = async (roomId, message, senderName, media) => {
   try {
-    const response = await api.post(`/${roomId}/messages`, {
-      message,
-      sender_name: senderName,
-    });
+    const formData = new FormData();
+    formData.append("message", message);
+    formData.append("sender_name", senderName);
+    if (media) formData.append("media", media);
+
+    const response = await api.post(`/${roomId}/messages`, formData);
     return response.data;
   } catch (error) {
     handleError(error);

@@ -1,6 +1,7 @@
 import axios from "axios";
+import { API_BASE_URL } from "../apiBaseURL";
 
-const api = axios.create({ baseURL: "http://localhost:5000/api/officer/audit", timeout: 5000 });
+const api = axios.create({ baseURL: `${API_BASE_URL}/api/officer/audit`, timeout: 5000 });
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("officer_token");
   if (token) config.headers.Authorization = `Bearer ${token}`;

@@ -3,8 +3,9 @@ import { Card, Typography, IconButton, Box, Tooltip, Link as MuiLink } from "@mu
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import LaunchIcon from "@mui/icons-material/Launch";
+import { API_BASE_URL } from "../../../api/apiBaseURL";
 
-const IMAGE_BASE_URL = "http://localhost:5000/uploads/officer/uploadAnnouncement";
+const IMAGE_BASE_URL = `${API_BASE_URL}/uploads/officer/uploadAnnouncement`;
 
 function AnnouncementCard({ announcement, onEdit, onDelete }) {
   const [imageError, setImageError] = useState(false);

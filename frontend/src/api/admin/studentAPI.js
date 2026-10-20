@@ -1,12 +1,16 @@
 import axios from "axios";
+import { API_BASE_URL } from "../apiBaseURL";
+import { handleAdminAuthFailure } from "./adminAuthInterceptor";
 
 const api = axios.create({
-  baseURL: "http://localhost:5000/api/admin",
+  baseURL: `${API_BASE_URL}/api/admin`,
   headers: {
     "Content-Type": "application/json",
   },
   timeout: 5000,
 });
+
+handleAdminAuthFailure(api);
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("admin_token");

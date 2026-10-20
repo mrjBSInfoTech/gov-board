@@ -12,13 +12,20 @@ import StudentPromoteDialog from "../admin/Student/StudentPromoteDialog";
 import AccountDemote from "../admin/Account/AccountDemote";
 import { promoteStudent } from "../../api/admin/studentAPI";
 import { demoteAccount } from "../../api/admin/accountAPI";
+import { API_BASE_URL } from "../../api/apiBaseURL";
 import {
   promoteOfficerMember,
   demoteOfficerMember,
 } from "../../api/officer/memberAPI";
 
-const FILE_BASE_URL =
-  "http://localhost:5000/uploads/officer/uploadAnnouncement";
+const FILE_BASE_URL = `${API_BASE_URL}/uploads/officer/uploadAnnouncement`;
+const MAX_CHAT_MEDIA_SIZE = 50 * 1024 * 1024;
+const CHAT_MEDIA_EXTENSIONS = new Set([
+  "jpg", "jpeg", "png", "gif", "webp",
+  "mp4", "webm", "mov",
+  "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+  "odt", "ods", "odp", "rtf", "txt", "csv", "zip",
+]);
 
 function getCurrentUserName() {
   const firstName =
@@ -76,6 +83,7 @@ export default function RoomTabs({
   const [messages, setMessages] = useState([]);
   const [members, setMembers] = useState([]);
   const [message, setMessage] = useState("");
+  const [chatMedia, setChatMedia] = useState(null);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [sending, setSending] = useState(false);
@@ -86,6 +94,28 @@ export default function RoomTabs({
   const [promoteError, setPromoteError] = useState("");
   const [requiresConfirmation, setRequiresConfirmation] = useState(false);
   const [demoteDialogOpen, setDemoteDialogOpen] = useState(false);
+
+  const loadMessages = useCallback(
+    async (showLoading = false) => {
+      if (!roomId) return;
+
+      if (showLoading) setLoadingMessages(true);
+      try {
+        setMessages(await fetchRoomMessages(roomId));
+        setError((currentError) =>
+          currentError === "Internal server error" ||
+          currentError === "Unable to load room messages"
+            ? ""
+            : currentError,
+        );
+      } catch (err) {
+        setError(err.message || "Unable to load room messages.");
+      } finally {
+        if (showLoading) setLoadingMessages(false);
+      }
+    },
+    [roomId],
+  );
 
   const loadMembers = useCallback(() => {
     if (!roomId) return;
@@ -100,46 +130,91 @@ export default function RoomTabs({
   useEffect(() => {
     if (!roomId) return;
 
-    setLoadingMessages(true);
-    fetchRoomMessages(roomId)
-      .then(setMessages)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoadingMessages(false));
-
+    void loadMessages(true);
     loadMembers();
-  }, [loadMembers, roomId]);
+  }, [loadMembers, loadMessages, roomId]);
 
-  const files = useMemo(
+  useEffect(() => {
+    if (!roomId || !chatFilesOpen) return undefined;
+
+    let cancelled = false;
+    let timeoutId;
+    const pollMessages = async () => {
+      await loadMessages();
+      if (!cancelled) {
+        timeoutId = setTimeout(pollMessages, 3000);
+      }
+    };
+
+    void pollMessages();
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [chatFilesOpen, loadMessages, roomId]);
+
+  const sharedItems = useMemo(
     () =>
-      announcements.flatMap((announcement) => {
-        const items = [];
-        if (announcement.image) {
-          items.push({
-            id: `image-${announcement.announcement_id}`,
-            name: announcement.image,
-            url: `${FILE_BASE_URL}/${announcement.image}`,
-            type: "Image",
-          });
-        }
-        if (announcement.link) {
-          items.push({
-            id: `link-${announcement.announcement_id}`,
-            name: announcement.link,
-            url: announcement.link.startsWith("http")
-              ? announcement.link
-              : `https://${announcement.link}`,
-            type: "Link",
-          });
-        }
-        return items;
-      }),
+      announcements.reduce(
+        (items, announcement) => {
+          if (announcement.image) {
+            items.media.push({
+              id: `image-${announcement.announcement_id}`,
+              name: announcement.image,
+              url: `${FILE_BASE_URL}/${announcement.image}`,
+              type: "image",
+            });
+          }
+          if (announcement.link) {
+            items.links.push({
+              id: `link-${announcement.announcement_id}`,
+              name: announcement.link,
+              url: announcement.link.startsWith("http")
+                ? announcement.link
+                : `https://${announcement.link}`,
+            });
+          }
+          return items;
+        },
+        { media: [], links: [] },
+      ),
     [announcements],
   );
+
+  const chatAttachments = useMemo(
+    () =>
+      messages
+        .filter((item) => item.media_url)
+        .map((item) => ({
+          id: `chat-${item.message_id}`,
+          name: item.media_name || "Chat attachment",
+          url: `${API_BASE_URL}${item.media_url}`,
+          type: item.media_type,
+        })),
+    [messages],
+  );
+
+  const sharedMedia = useMemo(
+    () => [
+      ...sharedItems.media,
+      ...chatAttachments.filter(
+        (item) => item.type === "image" || item.type === "video",
+      ),
+    ],
+    [chatAttachments, sharedItems.media],
+  );
+
+  const sharedFiles = useMemo(
+    () => chatAttachments.filter((item) => item.type === "file"),
+    [chatAttachments],
+  );
+
+  const sharedLinks = sharedItems.links;
 
   const handleSend = async (event) => {
     event.preventDefault();
     const trimmedMessage = message.trim();
-    if (!trimmedMessage || sending) return;
+    if ((!trimmedMessage && !chatMedia) || sending) return;
 
     setSending(true);
     setError("");
@@ -148,14 +223,32 @@ export default function RoomTabs({
         roomId,
         trimmedMessage,
         getCurrentUserName(),
+        chatMedia,
       );
       setMessages((currentMessages) => [...currentMessages, createdMessage]);
       setMessage("");
+      setChatMedia(null);
     } catch (err) {
       setError(err.message);
     } finally {
       setSending(false);
     }
+  };
+
+  const handleChatMediaChange = (file) => {
+    setError("");
+    setChatMedia(null);
+    if (!file) return;
+    if (file && file.size > MAX_CHAT_MEDIA_SIZE) {
+      setError("Media files must be 50 MB or smaller.");
+      return;
+    }
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    if (!extension || !CHAT_MEDIA_EXTENSIONS.has(extension)) {
+      setError("This file type is not supported in room chat.");
+      return;
+    }
+    setChatMedia(file);
   };
 
   const clearError = () => setError("");
@@ -254,10 +347,14 @@ export default function RoomTabs({
         tab={tab}
         onTabChange={setTab}
         messages={messages}
-        files={files}
+        mediaItems={sharedMedia}
+        files={sharedFiles}
+        links={sharedLinks}
         loadingMessages={loadingMessages}
         message={message}
         onMessageChange={setMessage}
+        media={chatMedia}
+        onMediaChange={handleChatMediaChange}
         onSend={handleSend}
         sending={sending}
         error={error}

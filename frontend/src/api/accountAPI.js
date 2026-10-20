@@ -1,4 +1,5 @@
 import axios from "axios";
+import { API_BASE_URL } from "./apiBaseURL";
 
 const createApi = (baseURL, tokenKey) => {
   const api = axios.create({ baseURL });
@@ -16,8 +17,8 @@ const handleError = (error) => {
 
 export const createAccountApi = (role) => {
   const api = role === "officer"
-    ? createApi("http://localhost:5000/api/officer/authenticate", "officer_token")
-    : createApi("http://localhost:5000/api/student/authenticate", "student_token");
+    ? createApi(`${API_BASE_URL}/api/officer/authenticate`, "officer_token")
+    : createApi(`${API_BASE_URL}/api/student/authenticate`, "student_token");
 
   return {
     getAccount: async () => {

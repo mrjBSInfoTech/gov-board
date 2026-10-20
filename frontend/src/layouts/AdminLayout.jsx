@@ -21,6 +21,7 @@ import { adminLightTheme, adminDarkTheme } from "../theme/customTheme";
 import Nexus from "../assets/react.svg";
 import { clearAuthData } from "../../utils/auth";
 import { recordAdminLogout } from "../api/admin/auditLogAPI";
+import { API_BASE_URL } from "../api/apiBaseURL";
 
 // Icons
 import DashboardIcon from "@mui/icons-material/Dashboard";
@@ -215,7 +216,7 @@ export default function AdminLayout() {
     >
       <Stack direction="row" spacing={1.5} alignItems="center">
         <Avatar
-          src="http://localhost:5000/uploads/profile.jpg"
+          src={`${API_BASE_URL}/uploads/profile.jpg`}
           sx={{
             width: 42,
             height: 42,

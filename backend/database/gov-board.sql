@@ -112,6 +112,9 @@ CREATE TABLE `room_message` (
   `sender_type` enum('admin','officer','student') NOT NULL,
   `sender_name` varchar(201) NOT NULL,
   `message` text NOT NULL,
+  `media_filename` varchar(255) DEFAULT NULL,
+  `media_name` varchar(255) DEFAULT NULL,
+  `media_type` enum('image','video','file') DEFAULT NULL,
   `date_created` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
