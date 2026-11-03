@@ -205,7 +205,7 @@ export default function CalendarEventsDialog({ open, onClose, roomId }) {
             </Stack>
           ) : (
             <Typography color="text.secondary" sx={{ py: 3, textAlign: "center" }}>
-              No events match the selected filters.
+              No upcoming events match your search or filters.
             </Typography>
           )}
         </Stack>

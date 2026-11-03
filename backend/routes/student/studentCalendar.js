@@ -17,6 +17,7 @@ router.get("/", authenticateStudent, (req, res) => {
             created_by, date_created, date_updated
        FROM calendar_event
       WHERE room_id = ?
+        AND start_at >= CURRENT_DATE
         AND EXISTS (
           SELECT 1
             FROM room_member

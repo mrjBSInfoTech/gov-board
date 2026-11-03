@@ -73,6 +73,7 @@ router.get("/", authenticateOfficer, (req, res) => {
       `SELECT event_id, room_id, title, description, start_at, end_at, reminder_minutes,
               created_by, date_created, date_updated
          FROM calendar_event WHERE room_id = ?
+          AND start_at >= CURRENT_DATE
         ORDER BY start_at ASC, event_id ASC`,
       [roomId],
       (err, results) => {
