@@ -55,9 +55,11 @@ export const validateRoomCode = async (roomCode) => {
   }
 };
 
-export const leaveRoom = async () => {
+export const leaveRoom = async (roomId) => {
   try {
-    const res = await api.delete("/officer/announcements/room");
+    const res = await api.delete("/officer/announcements/room", {
+      data: { roomId },
+    });
     return res.data;
   } catch (error) {
     console.error("Error leaving room:", error);
@@ -91,7 +93,10 @@ export const addAnnouncement = async (announcementData) => {
       formData.append("file", announcementData.file);
     }
 
-    const res = await api.post("/officer/announcements", formData);
+    const res = await api.post(
+      `/officer/announcements?roomId=${encodeURIComponent(announcementData.room_id)}`,
+      formData,
+    );
     return res.data;
   } catch (error) {
     handleError(error);
@@ -113,7 +118,10 @@ export const updateAnnouncement = async (id, announcementData) => {
       formData.append("file", announcementData.file);
     }
 
-    const res = await api.put(`/officer/announcements/${id}`, formData);
+    const res = await api.put(
+      `/officer/announcements/${id}?roomId=${encodeURIComponent(announcementData.room_id)}`,
+      formData,
+    );
     return res.data;
   } catch (error) {
     handleError(error);
@@ -121,9 +129,11 @@ export const updateAnnouncement = async (id, announcementData) => {
 };
 
 // Delete announcement
-export const deleteAnnouncement = async (id) => {
+export const deleteAnnouncement = async (id, roomId) => {
   try {
-    const res = await api.delete(`/officer/announcements/${id}`);
+    const res = await api.delete(`/officer/announcements/${id}`, {
+      params: { roomId },
+    });
     return res.data;
   } catch (error) {
     handleError(error);

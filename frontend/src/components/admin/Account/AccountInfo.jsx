@@ -72,6 +72,12 @@ function AccountInfo({ open, handleClose, selectedAccount }) {
               <strong>Section:</strong> {officer.section || "N/A"}
             </Typography>
             <Typography variant="body2">
+              <strong>College:</strong> {officer.college || "N/A"}
+            </Typography>
+            <Typography>
+              <strong>Course:</strong> {officer.course || "N/A"}
+            </Typography>
+            <Typography variant="body2">
               <strong>Can Add:</strong> {officer.can_add ? "Yes" : "No"}
             </Typography>
             <Typography variant="body2">

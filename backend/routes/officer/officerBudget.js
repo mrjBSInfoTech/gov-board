@@ -132,6 +132,7 @@ router.delete("/:id", authenticateOfficer, (req, res) => {
   findOfficerBudget(id, req.user.officer_id, (findErr, budget) => {
     if (findErr) return res.status(500).json({ error: findErr.message });
     if (!budget) return res.status(404).json({ error: "Budget not found" });
+    req.auditRoomId = budget.room_id;
     db.query("DELETE FROM budgets WHERE budget_id = ? AND room_id = ?", [id, budget.room_id], (err, result) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!result.affectedRows) return res.status(404).json({ error: "Budget not found" });

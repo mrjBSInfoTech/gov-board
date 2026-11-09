@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { AppProvider } from "@toolpad/core";
 import Backdrop from "@mui/material/Backdrop";
 import Button from "@mui/material/Button";
@@ -21,6 +21,7 @@ import { adminLightTheme, adminDarkTheme } from "../theme/customTheme";
 import Nexus from "../assets/react.svg";
 import { clearAuthData } from "../../utils/auth";
 import { recordOfficerLogout } from "../api/officer/auditLogAPI";
+import { fetchMyRooms } from "../api/roomAPI";
 import {
   GOVERNANCE_SECTIONS,
   getGovernanceAccess,
@@ -30,7 +31,8 @@ import {
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
-import CampaignIcon from "@mui/icons-material/Campaign";
+import FolderSpecialIcon from "@mui/icons-material/FolderSpecial";
+import HomeWorkIcon from "@mui/icons-material/HomeWork";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import GavelIcon from "@mui/icons-material/Gavel";
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
@@ -82,8 +84,8 @@ function CollapsibleNavigationItem({ item }) {
 export default function OfficerLayout() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [position, setPosition] = useState("");
-  const [roomName, setRoomName] = useState("");
+  const [rooms, setRooms] = useState([]);
+  const roomsRequestId = useRef(0);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -95,11 +97,9 @@ export default function OfficerLayout() {
     const loadOfficerProfile = () => {
       const storedFirstName = localStorage.getItem("officer_first_name");
       const storedLastName = localStorage.getItem("officer_last_name");
-      const storedPosition = localStorage.getItem("officer_position");
 
       setFirstName(storedFirstName || "");
       setLastName(storedLastName || "");
-      setPosition(storedPosition || "");
     };
 
     loadOfficerProfile();
@@ -112,25 +112,28 @@ export default function OfficerLayout() {
     };
   }, []);
 
-  useEffect(() => {
-    const loadRoomName = () => {
-      const savedRoom = localStorage.getItem("joinedRoom");
-      try {
-        setRoomName(savedRoom ? JSON.parse(savedRoom).room_name || "" : "");
-      } catch (error) {
-        console.error("Unable to read saved officer room:", error);
-        setRoomName("");
+  const loadRooms = useCallback(async () => {
+    const requestId = ++roomsRequestId.current;
+    try {
+      const currentRooms = await fetchMyRooms();
+      if (requestId === roomsRequestId.current) setRooms(currentRooms);
+    } catch (error) {
+      if (requestId === roomsRequestId.current) {
+        console.error("Unable to load officer room navigation:", error);
+        setRooms([]);
       }
-    };
-
-    loadRoomName();
-    window.addEventListener("room-membership-updated", loadRoomName);
-    window.addEventListener("storage", loadRoomName);
-    return () => {
-      window.removeEventListener("room-membership-updated", loadRoomName);
-      window.removeEventListener("storage", loadRoomName);
-    };
+    }
   }, []);
+
+  useEffect(() => {
+    void loadRooms();
+    window.addEventListener("room-membership-updated", loadRooms);
+    window.addEventListener("storage", loadRooms);
+    return () => {
+      window.removeEventListener("room-membership-updated", loadRooms);
+      window.removeEventListener("storage", loadRooms);
+    };
+  }, [loadRooms]);
 
   const router = {
     pathname: location.pathname.replace(/^\/officer/, "") || "/",
@@ -157,50 +160,80 @@ export default function OfficerLayout() {
     }, 150);
   };
 
-  const governanceAccess = getGovernanceAccess(position);
-  const governanceChildren = GOVERNANCE_SECTIONS.filter(({ key }) =>
-    governanceAccess.includes(key),
-  ).map(({ key, title }) => {
-    const icons = {
-      audit: <HistoryIcon />,
-      budget: <AccountBalanceIcon />,
-      funds: <AttachMoneyIcon />,
-      "event-handlers": <EventNoteIcon />,
-      moderate: <GavelIcon />,
-    };
-
-
-
-    return {
+  const governanceIcons = {
+    audit: <HistoryIcon />,
+    budget: <AccountBalanceIcon />,
+    funds: <AttachMoneyIcon />,
+    "event-handlers": <EventNoteIcon />,
+    moderate: <GavelIcon />,
+  };
+  const roomNavigation = rooms.map((room) => {
+    const governanceAccess =
+      room.member_type === "officer" ? getGovernanceAccess(room.position) : [];
+    const governanceChildren = GOVERNANCE_SECTIONS.filter(({ key }) =>
+      governanceAccess.includes(key),
+    ).map(({ key, title }) => ({
       segment: key,
       title,
-      icon: icons[key],
+      icon: governanceIcons[key],
+    }));
+
+    return {
+      segment: String(room.room_id),
+      title: room.room_name,
+      icon: <FolderSpecialIcon />,
+      children: [
+        {
+          segment: "hub",
+          title: "Hub",
+          icon: <HomeWorkIcon />,
+        },
+        {
+          segment: "quests",
+          title: "Quests",
+          icon: <EmojiEventsIcon />,
+        },
+        ...(governanceChildren.length
+          ? [
+              {
+                segment: "governance",
+                title: "Governance",
+                icon: <AccountBalanceIcon />,
+                children: governanceChildren,
+              },
+            ]
+          : []),
+      ],
     };
   });
 
   const navigation = [
     { segment: "dashboard", title: "Dashboard", icon: <DashboardIcon /> },
     { segment: "account", title: "Account", icon: <AccountCircleIcon /> },
-    { segment: "quest", title: "Quest", icon: <EmojiEventsIcon /> },
     {
-      segment: "room",
-      title: roomName || "Room",
+      segment: "rooms",
+      title: "Rooms",
       icon: <MeetingRoomIcon />,
       children: [
         {
-          segment: "announcement",
+          segment: "main",
           title: "Main",
-          icon: <CampaignIcon />,
+          icon: <DashboardIcon />,
         },
-        {
-          segment: "governance",
-          title: "Governance",
-          icon: <AccountBalanceIcon />,
-          children: governanceChildren,
-        },
+        ...roomNavigation,
       ],
     },
   ];
+
+  const activeRoomId = location.pathname.match(/^\/officer\/rooms\/(\d+)\//)?.[1];
+  const activeRoom = rooms.find(
+    (room) => Number(room.room_id) === Number(activeRoomId),
+  );
+  const displayedPosition = activeRoom
+    ? activeRoom.member_type === "officer"
+      ? activeRoom.position || "Officer"
+      : "Student"
+    : "Officer";
 
   const branding = {
     logo: (
@@ -266,7 +299,7 @@ export default function OfficerLayout() {
               {firstName} {lastName}
             </Typography>
             <Typography variant="caption" sx={{ color: "#a9b9bf" }}>
-              {position || "Officer"}
+              {displayedPosition}
             </Typography>
           </Stack>
         )}
@@ -353,7 +386,7 @@ export default function OfficerLayout() {
         session={{
           user: {
             name: `${firstName} ${lastName}`.trim() || "Officer",
-            position: position || "Officer",
+            position: displayedPosition,
           },
         }}
         theme={theme}

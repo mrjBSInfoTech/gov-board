@@ -17,16 +17,29 @@ router.get("/", async (req, res) => {
 
   try {
     let sql = `
-      SELECT audit_id, datetime, action, actor, role, status, information
-      FROM audit_logs
+      SELECT a.audit_id, a.datetime, a.action, a.actor, a.role, a.status, a.information
+      FROM audit_logs a
       WHERE 1 = 1
     `;
     const params = [];
 
+    if (!req.user.is_super_admin) {
+      sql += `
+        AND (
+          (a.role = 'Admin' AND a.actor = ?)
+          OR EXISTS (
+            SELECT 1 FROM student s
+            WHERE s.student_number = a.actor AND s.college = ?
+          )
+        )
+      `;
+      params.push(req.user.username, req.user.college);
+    }
+
     if (search) {
       sql += `
         AND (
-          action LIKE ? OR actor LIKE ? OR role LIKE ? OR status LIKE ? OR information LIKE ?
+          a.action LIKE ? OR a.actor LIKE ? OR a.role LIKE ? OR a.status LIKE ? OR a.information LIKE ?
         )
       `;
       params.push(
@@ -39,7 +52,7 @@ router.get("/", async (req, res) => {
     }
 
     if (date) {
-      sql += ` AND DATE(datetime) = ? `;
+      sql += ` AND DATE(a.datetime) = ? `;
       params.push(date);
     }
 
@@ -51,10 +64,10 @@ router.get("/", async (req, res) => {
       year: "1 YEAR",
     };
     if (periodIntervals[period]) {
-      sql += ` AND datetime >= DATE_SUB(NOW(), INTERVAL ${periodIntervals[period]}) `;
+      sql += ` AND a.datetime >= DATE_SUB(NOW(), INTERVAL ${periodIntervals[period]}) `;
     }
 
-    sql += ` ORDER BY datetime DESC, audit_id DESC `;
+    sql += ` ORDER BY a.datetime DESC, a.audit_id DESC `;
 
     db.query(sql, params, (error, results) => {
       if (error) return res.status(500).json({ error: error.message });

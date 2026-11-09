@@ -60,6 +60,8 @@ export const logout = () => {
   localStorage.removeItem("admin_id");
   localStorage.removeItem("first_name");
   localStorage.removeItem("last_name");
+  localStorage.removeItem("admin_position");
+  localStorage.removeItem("admin_college");
 };
 
 // CHECK IF USER IS AUTHENTICATED

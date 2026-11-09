@@ -42,9 +42,9 @@ export const validateRoomCode = async (roomNumber) => {
   }
 };
 
-export const leaveRoom = async () => {
+export const leaveRoom = async (roomId) => {
   try {
-    const res = await api.delete("/room");
+    const res = await api.delete("/room", { data: { roomId } });
     return res.data;
   } catch (error) {
     handleError(error);

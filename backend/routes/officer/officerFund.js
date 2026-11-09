@@ -355,6 +355,7 @@ router.post("/:id/contributions", authenticateOfficer, (req, res) => {
     if (findErr) return res.status(500).json({ error: findErr.message });
     if (!fund) return res.status(404).json({ error: "Fund not found" });
 
+    req.auditRoomId = fund.room_id;
     const remaining = Number(fund.target_amount) - Number(fund.total_contributed);
     if (remaining <= 0) return res.status(409).json({ error: "This fund is already complete" });
     if (Number(req.body.amount) > remaining) {
@@ -411,6 +412,7 @@ router.delete("/:id", authenticateOfficer, (req, res) => {
       return res.status(404).json({ error: "Fund not found" });
     }
 
+    req.auditRoomId = fund.room_id;
     db.query(
       "DELETE FROM funds WHERE fund_id = ? AND room_id = ?",
       [id, fund.room_id],

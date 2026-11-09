@@ -40,7 +40,7 @@ function SummaryCard({ label, value, color }) {
   );
 }
 
-export default function BudgetPage() {
+export default function BudgetPage({ roomId: selectedRoomId }) {
   const [room, setRoom] = useState(null);
   const [budgets, setBudgets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -64,7 +64,7 @@ export default function BudgetPage() {
 
   useEffect(() => {
     let active = true;
-    fetchMyRoom()
+    fetchMyRoom(selectedRoomId)
       .then(async (currentRoom) => {
         if (!active) return;
         setRoom(currentRoom || null);
@@ -80,7 +80,7 @@ export default function BudgetPage() {
     return () => {
       active = false;
     };
-  }, [loadBudgets]);
+  }, [loadBudgets, selectedRoomId]);
 
   const totals = useMemo(
     () =>

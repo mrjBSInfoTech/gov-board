@@ -5,7 +5,7 @@ import {
   getRoomLevel,
   getRoomQuests,
 } from "../utils/shared/roomLevelService.js";
-import { isRoomMember } from "../utils/shared/roomMembership.js";
+import { hasRoomMembership } from "../utils/shared/roomMembership.js";
 
 const router = express.Router();
 
@@ -26,9 +26,14 @@ const authenticateRoomUser = (req, res, next) => {
 };
 
 const requireRoomMember = async (req, res, next) => {
+  if (req.user.admin_id) {
+    return res
+      .status(403)
+      .json({ message: "Room levels are available to students and officers." });
+  }
+
   const roomId = Number(req.params.roomId);
   const memberId = req.user.officer_id || req.user.student_id || req.user.id;
-  const memberType = req.user.officer_id ? "officer" : "student";
 
   if (!Number.isSafeInteger(roomId) || roomId < 1 ||
       !Number.isSafeInteger(Number(memberId)) || Number(memberId) < 1) {
@@ -38,7 +43,7 @@ const requireRoomMember = async (req, res, next) => {
   }
 
   try {
-    if (!(await isRoomMember(db, roomId, Number(memberId), memberType))) {
+    if (!(await hasRoomMembership(db, roomId, Number(memberId)))) {
       return res
         .status(403)
         .json({ message: "You are not a member of this room." });

@@ -31,6 +31,9 @@ CREATE TABLE `admin` (
   `first_name` varchar(100) NOT NULL,
   `last_name` varchar(100) NOT NULL,
   `role` varchar(50) NOT NULL,
+  `position` enum('Governor','College Head','Super Admin') NOT NULL DEFAULT 'College Head',
+  `college` varchar(150) DEFAULT NULL,
+  `can_edit_students` tinyint(1) NOT NULL DEFAULT 0,
   `password` varchar(255) NOT NULL,
   `date_created` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -39,8 +42,8 @@ CREATE TABLE `admin` (
 -- Dumping data for table `admin`
 --
 
-INSERT INTO `admin` (`admin_id`, `username`, `first_name`, `last_name`, `role`, `password`, `date_created`) VALUES
-(1, 'Admin', 'John ', 'Doe', 'Admin', '$2b$10$su1lyrGJEUdG2/ROYcqFP.vvWjQdL9sVYPFdWv5uftynaZMAYGenW', '2026-09-10 15:21:28');
+INSERT INTO `admin` (`admin_id`, `username`, `first_name`, `last_name`, `role`, `position`, `college`, `password`, `date_created`) VALUES
+(1, 'Admin', 'John ', 'Doe', 'Admin', 'Super Admin', NULL, '$2b$10$su1lyrGJEUdG2/ROYcqFP.vvWjQdL9sVYPFdWv5uftynaZMAYGenW', '2026-09-10 15:21:28');
 
 -- --------------------------------------------------------
 
@@ -88,6 +91,8 @@ CREATE TABLE `room` (
   `room_id` int(11) NOT NULL,
   `room_number` varchar(50) NOT NULL,
   `room_name` varchar(100) NOT NULL,
+  `description` text NOT NULL,
+  `college` varchar(150) DEFAULT NULL,
   `date_created` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -95,9 +100,9 @@ CREATE TABLE `room` (
 -- Dumping data for table `room`
 --
 
-INSERT INTO `room` (`room_id`, `room_number`, `room_name`, `date_created`) VALUES
-(1, 'bly-ogts', 'John Doe\'s Room', '2026-09-10 22:49:57'),
-(2, 'ncl-wh4x', 'Jane Doe\'s Room', '2026-09-10 23:23:56');
+INSERT INTO `room` (`room_id`, `room_number`, `room_name`, `description`, `college`, `date_created`) VALUES
+(1, 'bly-ogts', 'John Doe\'s Room', '', NULL, '2026-09-10 22:49:57'),
+(2, 'ncl-wh4x', 'Jane Doe\'s Room', '', NULL, '2026-09-10 23:23:56');
 
 -- --------------------------------------------------------
 
@@ -124,19 +129,23 @@ CREATE TABLE `room_member` (
   `room_id` int(11) NOT NULL,
   `member_type` enum('officer','student') NOT NULL,
   `member_id` int(11) NOT NULL,
+  `position` varchar(100) NOT NULL DEFAULT 'Student',
   `date_joined` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Calendar events created by officers in the Event Handlers workspace.
 CREATE TABLE `calendar_event` (
   `event_id` int(11) NOT NULL,
-  `room_id` int(11) NOT NULL,
+  `room_id` int(11) DEFAULT NULL,
+  `visibility_scope` enum('room','college','global') NOT NULL DEFAULT 'room',
+  `college` varchar(150) DEFAULT NULL,
   `title` varchar(200) NOT NULL,
   `description` text DEFAULT NULL,
   `start_at` datetime NOT NULL,
   `end_at` datetime DEFAULT NULL,
   `reminder_minutes` int(11) DEFAULT NULL,
-  `created_by` int(11) NOT NULL,
+  `created_by` int(11) DEFAULT NULL,
+  `created_by_admin` int(11) DEFAULT NULL,
   `date_created` timestamp NOT NULL DEFAULT current_timestamp(),
   `date_updated` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -154,6 +163,8 @@ CREATE TABLE `student` (
   `last_name` varchar(100) NOT NULL,
   `student_number` varchar(150) NOT NULL,
   `position` varchar(100) DEFAULT 'Student',
+  `college` varchar(150) DEFAULT NULL,
+  `course` varchar(150) DEFAULT NULL,
   `batch_id` int(11) DEFAULT NULL,
   `password` varchar(255) NOT NULL,
   `role` varchar(100) DEFAULT NULL,
@@ -168,10 +179,10 @@ CREATE TABLE `student` (
 -- Dumping data for table `student`
 --
 
-INSERT INTO `student` (`student_id`, `admin_id`, `first_name`, `last_name`, `student_number`, `position`, `batch_id`, `password`, `role`, `can_add`, `can_edit`, `can_delete`, `can_moderate`, `date_created`) VALUES
-(1, 1, 'John', 'Doe', '3000000000', 'Mayor', 1, '$2b$10$70ad/kVr/tcGhcNtMCSk9eALW2w0J8iI3BUytDuO1Mqq0Frqzo5Se', 'officer', 1, 1, 1, 0, '2026-09-10 22:48:15'),
-(4, NULL, 'Jake', 'Doe', '1000000000', 'Student', 1, '$2b$10$70ad/kVr/tcGhcNtMCSk9eALW2w0J8iI3BUytDuO1Mqq0Frqzo5Se', NULL, 0, 0, 0, 0, '2026-09-20 22:03:55'),
-(5, NULL, 'Joy', 'Doe', '2000000000', 'Student', 1, '$2b$10$70ad/kVr/tcGhcNtMCSk9eALW2w0J8iI3BUytDuO1Mqq0Frqzo5Se', NULL, 0, 0, 0, 0, '2026-09-20 22:08:42');
+INSERT INTO `student` (`student_id`, `admin_id`, `first_name`, `last_name`, `student_number`, `position`, `college`, `batch_id`, `password`, `role`, `can_add`, `can_edit`, `can_delete`, `can_moderate`, `date_created`) VALUES
+(1, 1, 'John', 'Doe', '3000000000', 'Mayor', NULL, 1, '$2b$10$70ad/kVr/tcGhcNtMCSk9eALW2w0J8iI3BUytDuO1Mqq0Frqzo5Se', 'officer', 1, 1, 1, 0, '2026-09-10 22:48:15'),
+(4, NULL, 'Jake', 'Doe', '1000000000', 'Student', NULL, 1, '$2b$10$70ad/kVr/tcGhcNtMCSk9eALW2w0J8iI3BUytDuO1Mqq0Frqzo5Se', NULL, 0, 0, 0, 0, '2026-09-20 22:03:55'),
+(5, NULL, 'Joy', 'Doe', '2000000000', 'Student', NULL, 1, '$2b$10$70ad/kVr/tcGhcNtMCSk9eALW2w0J8iI3BUytDuO1Mqq0Frqzo5Se', NULL, 0, 0, 0, 0, '2026-09-20 22:08:42');
 
 --
 -- Indexes for dumped tables
@@ -215,7 +226,7 @@ ALTER TABLE `room_message`
 -- Indexes for table `room_member`
 ALTER TABLE `room_member`
   ADD PRIMARY KEY (`room_member_id`),
-  ADD UNIQUE KEY `uq_room_member` (`room_id`,`member_type`,`member_id`),
+  ADD UNIQUE KEY `uq_room_member` (`room_id`,`member_id`),
   ADD KEY `idx_room_member_room` (`room_id`);
 
 -- Indexes for table `calendar_event`
@@ -223,7 +234,9 @@ ALTER TABLE `calendar_event`
   ADD PRIMARY KEY (`event_id`),
   ADD KEY `idx_calendar_event_room` (`room_id`),
   ADD KEY `idx_calendar_event_start` (`start_at`),
-  ADD KEY `idx_calendar_event_creator` (`created_by`);
+  ADD KEY `idx_calendar_event_creator` (`created_by`),
+  ADD KEY `idx_calendar_event_admin_creator` (`created_by_admin`),
+  ADD KEY `idx_calendar_event_scope_college` (`visibility_scope`,`college`);
 
 --
 -- Indexes for table `student`
@@ -315,6 +328,8 @@ ALTER TABLE `calendar_event`
   ADD CONSTRAINT `calendar_event_creator_fk` FOREIGN KEY (`created_by`) REFERENCES `student` (`student_id`) ON DELETE CASCADE;
 ALTER TABLE `calendar_event`
   ADD CONSTRAINT `calendar_event_room_fk` FOREIGN KEY (`room_id`) REFERENCES `room` (`room_id`) ON DELETE CASCADE;
+ALTER TABLE `calendar_event`
+  ADD CONSTRAINT `calendar_event_admin_creator_fk` FOREIGN KEY (`created_by_admin`) REFERENCES `admin` (`admin_id`) ON DELETE SET NULL;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

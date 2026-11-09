@@ -8,6 +8,7 @@ import { fileURLToPath } from "url";
 import db from "../database/db.js";
 import { isRoomMember } from "../utils/shared/roomMembership.js";
 import { awardRoomXp } from "../utils/shared/roomLevelService.js";
+import { getAdminRoomAccess } from "../utils/shared/adminRoomAccess.js";
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -78,6 +79,20 @@ const uploadChatMedia = (req, res, next) => {
   });
 };
 
+const getRoomMediaUrl = (req, messageId) => {
+  const mediaToken = jwt.sign(
+    {
+      room_id: req.roomId,
+      message_id: Number(messageId),
+      member_id: req.roomMemberId,
+      member_type: req.roomMemberType,
+    },
+    process.env.JWT_SECRET || "your_secret_key",
+    { expiresIn: "15m" },
+  );
+  return `/api/rooms/${req.roomId}/messages/${messageId}/media?token=${encodeURIComponent(mediaToken)}`;
+};
+
 const removeUploadedMedia = (file) => {
   if (!file) return;
   fs.unlink(file.path, (error) => {
@@ -105,14 +120,21 @@ const authenticateRoomUser = (req, res, next) => {
       }
 
       db.query(
-        "SELECT role FROM student WHERE student_id = ? LIMIT 1",
-        [user.officer_id],
+        `SELECT EXISTS (
+                  SELECT 1 FROM room_member
+                   WHERE member_id = ? AND member_type = 'officer'
+                ) AS has_officer_membership
+           FROM student WHERE student_id = ? LIMIT 1`,
+        [user.officer_id, user.officer_id],
         (roleError, rows) => {
           if (roleError) {
             console.error("Room account role verification error:", roleError);
             return res.status(500).json({ message: "Unable to verify account role." });
           }
-          if (rows.length === 0 || !rows[0].role) {
+          if (
+            rows.length === 0 ||
+            !rows[0].has_officer_membership
+          ) {
             return res.status(403).json({
               message: "This account is now a student. Please use the student panel.",
               roleChanged: true,
@@ -133,7 +155,6 @@ const authorizeRoomMember = async (req, res, next) => {
   const memberId = Number(
     req.user.officer_id || req.user.student_id || req.user.id,
   );
-  const memberType = req.user.officer_id ? "officer" : "student";
 
   if (!Number.isSafeInteger(roomId) || roomId < 1) {
     return res.status(400).json({ message: "A valid room and member are required." });
@@ -141,17 +162,16 @@ const authorizeRoomMember = async (req, res, next) => {
 
   if (Number.isSafeInteger(adminId) && adminId > 0) {
     try {
-      const [rows] = await db.promise().query(
-        "SELECT room_id FROM room WHERE room_id = ? LIMIT 1",
-        [roomId],
-      );
-      if (!rows.length) {
-        return res.status(404).json({ message: "Room not found." });
+      const adminRoomAccess = await getAdminRoomAccess(db, adminId, roomId);
+      if (!adminRoomAccess) {
+        return res.status(404).json({ message: "Room not found or inaccessible." });
       }
 
       req.roomId = roomId;
       req.roomMemberId = adminId;
       req.roomMemberType = "admin";
+      req.isSuperAdmin = adminRoomAccess.isSuperAdmin;
+      req.adminCollege = adminRoomAccess.college;
       return next();
     } catch (error) {
       console.error("Room existence check error:", error);
@@ -164,13 +184,21 @@ const authorizeRoomMember = async (req, res, next) => {
   }
 
   try {
-    if (!(await isRoomMember(db, roomId, memberId, memberType))) {
+    const [memberships] = await db.promise().query(
+      `SELECT member_type, position
+         FROM room_member
+        WHERE room_id = ? AND member_id = ?
+        LIMIT 1`,
+      [roomId, memberId],
+    );
+    if (!memberships.length) {
       return res.status(403).json({ message: "You are not a member of this room." });
     }
 
     req.roomId = roomId;
     req.roomMemberId = memberId;
-    req.roomMemberType = memberType;
+    req.roomMemberType = memberships[0].member_type;
+    req.roomMemberPosition = memberships[0].position;
     return next();
   } catch (error) {
     console.error("Room membership verification error:", error);
@@ -183,16 +211,23 @@ router.get(
   authenticateRoomUser,
   authorizeRoomMember,
   (req, res) => {
+    const collegeFilter =
+      req.roomMemberType === "admin" && !req.isSuperAdmin
+        ? " AND s.college = ?"
+        : "";
+    const params = req.isSuperAdmin || req.roomMemberType !== "admin"
+      ? [req.roomId]
+      : [req.roomId, req.adminCollege];
     db.query(
-      `SELECT rm.member_id, s.first_name, s.last_name, s.position,
+      `SELECT rm.member_id, s.first_name, s.last_name, rm.position,
         b.section_name AS section,
-        CASE WHEN s.role IS NOT NULL THEN 'officer' ELSE 'student' END AS member_type
+        rm.member_type
       FROM room_member rm
       INNER JOIN student s ON s.student_id = rm.member_id
       LEFT JOIN batch b ON b.batch_id = s.batch_id
-      WHERE rm.room_id = ?
+      WHERE rm.room_id = ?${collegeFilter}
       ORDER BY first_name ASC, last_name ASC`,
-      [req.roomId],
+      params,
       (err, results) => {
         if (err) {
           console.error("Room member read error:", err);
@@ -205,23 +240,34 @@ router.get(
 );
 
 router.get("/my-room", authenticateRoomUser, (req, res) => {
+  if (req.user.admin_id) {
+    return res
+      .status(403)
+      .json({ message: "Admin accounts do not have a student room membership." });
+  }
+
   const memberId = req.user.officer_id || req.user.student_id || req.user.id;
+  const requestedRoomId = req.query.roomId ? Number(req.query.roomId) : null;
 
   if (!memberId) {
     return res.status(403).json({ message: "Unable to identify room member." });
   }
+  if (
+    requestedRoomId !== null &&
+    (!Number.isSafeInteger(requestedRoomId) || requestedRoomId < 1)
+  ) {
+    return res.status(400).json({ message: "A valid roomId is required." });
+  }
 
   db.query(
-    `SELECT r.room_id, r.room_number, r.room_name, r.date_created
+    `SELECT r.room_id, r.room_number, r.room_name, r.description, r.college, r.date_created,
+            rm.member_type, rm.position
      FROM room_member rm
      INNER JOIN room r ON r.room_id = rm.room_id
-     INNER JOIN student s ON s.student_id = rm.member_id
-     WHERE rm.member_id = ?
-       AND (rm.member_type = CASE WHEN s.role IS NULL THEN 'student' ELSE 'officer' END
-            OR rm.member_type IS NULL)
+     WHERE rm.member_id = ? AND (? IS NULL OR rm.room_id = ?)
      ORDER BY rm.date_joined DESC, rm.room_id DESC
      LIMIT 1`,
-    [memberId],
+    [memberId, requestedRoomId, requestedRoomId],
     (err, results) => {
       if (err) {
         console.error("Current room lookup error:", err);
@@ -229,6 +275,35 @@ router.get("/my-room", authenticateRoomUser, (req, res) => {
       }
 
       res.json(results[0] || null);
+    },
+  );
+});
+
+router.get("/my-rooms", authenticateRoomUser, (req, res) => {
+  if (req.user.admin_id) {
+    return res
+      .status(403)
+      .json({ message: "Admin accounts do not have student room memberships." });
+  }
+  const memberId = req.user.officer_id || req.user.student_id || req.user.id;
+  if (!memberId) {
+    return res.status(403).json({ message: "Unable to identify room member." });
+  }
+
+  db.query(
+    `SELECT r.room_id, r.room_number, r.room_name, r.description, r.college, r.date_created,
+            rm.member_type, rm.position, rm.date_joined
+       FROM room_member rm
+       INNER JOIN room r ON r.room_id = rm.room_id
+      WHERE rm.member_id = ?
+      ORDER BY rm.date_joined DESC, rm.room_id DESC`,
+    [memberId],
+    (err, rooms) => {
+      if (err) {
+        console.error("Room list lookup error:", err);
+        return res.status(500).json({ message: "Unable to load your rooms." });
+      }
+      res.json(rooms);
     },
   );
 });
@@ -252,12 +327,82 @@ router.get(
           results.map(({ media_filename, ...item }) => ({
             ...item,
             media_url: media_filename
-              ? `/uploads/room-chat/${media_filename}`
+              ? getRoomMediaUrl(req, item.message_id)
               : null,
           })),
         );
       },
     );
+  },
+);
+
+router.get(
+  "/:roomId/messages/:messageId/media",
+  async (req, res) => {
+    let mediaToken;
+    try {
+      mediaToken = jwt.verify(
+        req.query.token,
+        process.env.JWT_SECRET || "your_secret_key",
+      );
+    } catch {
+      return res.status(403).json({ message: "Invalid or expired room media link." });
+    }
+
+    const roomId = Number(req.params.roomId);
+    const messageId = Number(req.params.messageId);
+    if (
+      Number(mediaToken.room_id) !== roomId ||
+      Number(mediaToken.message_id) !== messageId
+    ) {
+      return res.status(403).json({ message: "Invalid room media link." });
+    }
+
+    try {
+      const memberId = Number(mediaToken.member_id);
+      const memberType = mediaToken.member_type;
+      const hasAccess =
+        memberType === "admin"
+          ? await getAdminRoomAccess(db, memberId, roomId)
+          : ["officer", "student"].includes(memberType) &&
+            (await isRoomMember(db, roomId, memberId, memberType));
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You cannot access this room media." });
+      }
+
+      const [rows] = await db.promise().query(
+        `SELECT media_filename
+         FROM room_message
+         WHERE room_id = ? AND message_id = ? AND media_filename IS NOT NULL
+         LIMIT 1`,
+        [roomId, messageId],
+      );
+      if (!rows.length) {
+        return res.status(404).json({ message: "Room media not found." });
+      }
+
+      const filename = path.basename(rows[0].media_filename);
+      if (filename !== rows[0].media_filename) {
+        return res.status(404).json({ message: "Room media not found." });
+      }
+
+      res.set("Cache-Control", "private, no-store");
+      res.sendFile(path.join(chatUploadDir, filename), (sendError) => {
+        if (!sendError) return;
+        console.error("Room media download error:", sendError);
+        if (!res.headersSent) {
+          res.status(sendError.statusCode === 404 ? 404 : 500).json({
+            message:
+              sendError.statusCode === 404
+                ? "Room media not found."
+                : "Unable to load room media.",
+          });
+        }
+      });
+    } catch (error) {
+      console.error("Room media access error:", error);
+      return res.status(500).json({ message: "Unable to load room media." });
+    }
   },
 );
 
@@ -329,7 +474,7 @@ router.post(
               sender_name: senderName,
               message: message || "",
               media_url: req.file
-                ? `/uploads/room-chat/${req.file.filename}`
+                ? getRoomMediaUrl(req, result.insertId)
                 : null,
               media_name: mediaName,
               media_type: mediaType,

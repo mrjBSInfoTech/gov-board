@@ -1,4 +1,5 @@
 import { logAudit } from "../shared/auditLogger.js";
+import { getAuditRoomId } from "../shared/roomAuditScope.js";
 import { logStudentAudit } from "./studentAuditLogger.js";
 
 export function auditStudentActivity(req, res, next) {
@@ -11,6 +12,7 @@ export function auditStudentActivity(req, res, next) {
     void logStudentAudit(req.user.student_id, {
       action: actions[req.method] || "View",
       status: res.statusCode >= 400 ? "FAILED" : "SUCCESS",
+      room_id: getAuditRoomId(req),
       information: `${req.method} ${path} (HTTP ${res.statusCode})`,
     });
   });
@@ -33,6 +35,7 @@ export function auditStudentChanges(req, res, next) {
       actor: `Student ${req.user.student_id}`,
       role: "Student",
       status: "Success",
+      room_id: getAuditRoomId(req),
       information: `${req.method} ${path}`,
     });
   });

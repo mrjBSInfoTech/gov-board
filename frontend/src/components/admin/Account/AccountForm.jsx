@@ -44,6 +44,8 @@ const emptyForm = {
   first_name: "",
   last_name: "",
   student_number: "",
+  college: "",
+  course: "",
   position: "",
   year: "",
   section: "",
@@ -98,6 +100,10 @@ const POSITION_OPTIONS = [
 
 function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
   const isEdit = Boolean(selectedAccount);
+  const adminCollege = localStorage.getItem("admin_college") || "";
+  const isSuperAdmin =
+    localStorage.getItem("admin_id") === "1" &&
+    localStorage.getItem("admin_position") === "Super Admin";
   const [formData, setFormData] = useState(emptyForm);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -109,6 +115,8 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
     if (selectedAccount) {
       setFormData({
         student_number: toText(selectedAccount.student_number),
+        college: toText(selectedAccount.college),
+        course: toText(selectedAccount.course),
         position: toText(selectedAccount.position),
         first_name: toText(selectedAccount.first_name),
         last_name: toText(selectedAccount.last_name),
@@ -123,12 +131,12 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
         can_moderate: toBoolean(selectedAccount.can_moderate ?? false),
       });
     } else {
-      setFormData(emptyForm);
+      setFormData({ ...emptyForm, college: adminCollege });
     }
     setError("");
     setShowPassword(false);
     setShowConfirm(false);
-  }, [open, selectedAccount]);
+  }, [adminCollege, open, selectedAccount]);
 
   const handleKeyDown = (event) => {
     if (event.key === "Enter") {
@@ -184,6 +192,7 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
 
   const handleSubmit = async () => {
     const studentNumber = toText(formData.student_number).trim();
+    const college = toText(formData.college).trim();
     const firstName = toText(formData.first_name).trim();
     const lastName = toText(formData.last_name).trim();
     const position = toText(formData.position).trim();
@@ -198,6 +207,10 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
     }
     if (!studentNumber) {
       setError("Student Number is required.");
+      return;
+    }
+    if (!college) {
+      setError("College is required.");
       return;
     }
     if (!position) {
@@ -227,6 +240,8 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
     try {
       const payload = {
         student_number: studentNumber,
+        college,
+        course: toText(formData.course).trim(),
         position,
         first_name: firstName,
         last_name: lastName,
@@ -307,6 +322,24 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
             disabled={loading}
             required
             size="small"
+          />
+          <TextField
+            label="College"
+            name="college"
+            value={formData.college}
+            onChange={handleChange}
+            disabled={loading || !isSuperAdmin}
+            required
+            size="small"
+          />
+          <TextField
+            label="Course"
+            name="course"
+            value={formData.course}
+            onChange={handleChange}
+            disabled={loading}
+            size="small"
+            inputProps={{ maxLength: 150 }}
           />
 
           {/* Position */}
@@ -530,4 +563,3 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
 }
 
 export default AccountForm;
-

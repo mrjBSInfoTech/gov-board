@@ -17,8 +17,7 @@ import { Navigate } from "react-router-dom";
 import { canAccessGovernanceSection } from "../../utils/governanceAccess";
 import { API_BASE_URL } from "../../api/apiBaseURL";
 
-export default function Moderate() {
-  const position = localStorage.getItem("officer_position");
+export default function Moderate({ roomId, position }) {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -38,7 +37,7 @@ export default function Moderate() {
         }
 
         const response = await fetch(
-          `${API_BASE_URL}/api/officer/moderate/same-section`,
+          `${API_BASE_URL}/api/officer/moderate/same-section?roomId=${encodeURIComponent(roomId)}`,
           {
             headers: { Authorization: `Bearer ${token}` },
           },
@@ -58,7 +57,7 @@ export default function Moderate() {
     };
 
     loadMembers();
-  }, [position]);
+  }, [position, roomId]);
 
   const memberTypeOptions = useMemo(() => {
     const options = new Set(members.map((member) => member.member_type));
@@ -79,7 +78,12 @@ export default function Moderate() {
   }, [members, searchTerm, selectedType]);
 
   if (!canAccessGovernanceSection(position, "moderate")) {
-    return <Navigate to="/officer/dashboard" replace />;
+    return (
+      <Navigate
+        to={roomId ? `/officer/rooms/${roomId}/hub` : "/officer/rooms/main"}
+        replace
+      />
+    );
   }
 
   return (

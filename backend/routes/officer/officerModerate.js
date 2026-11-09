@@ -11,24 +11,30 @@ const MODERATE_POSITIONS = new Set([
   "protocol officer",
 ]);
 
-router.get("/same-section", authenticateOfficer, (req, res) => {
+router.get("/same-section", authenticateOfficer, async (req, res) => {
   const officerId = Number(req.user?.officer_id);
+  const roomId = Number(req.query.roomId);
+  if (!Number.isSafeInteger(roomId) || roomId < 1) {
+    return res.status(400).json({ message: "A valid roomId is required." });
+  }
 
-  const resolveSectionSql = `
-    SELECT b.year_name AS year, b.section_name AS section, o.position
-    FROM student o
-    LEFT JOIN batch b ON b.batch_id = o.batch_id
-    WHERE o.student_id = ? AND o.role IS NOT NULL
-    LIMIT 1
-  `;
-
-  db.query(resolveSectionSql, [officerId], (err, sectionRows) => {
-    if (err) {
-      console.error("Moderator section lookup error:", err);
-      return res.status(500).json({ message: "Database error" });
+  try {
+    const connection = db.promise();
+    const [moderators] = await connection.query(
+      `SELECT rm.position, b.year_name AS year, b.section_name AS section
+         FROM room_member rm
+         INNER JOIN student s ON s.student_id = rm.member_id
+         LEFT JOIN batch b ON b.batch_id = s.batch_id
+        WHERE rm.room_id = ? AND rm.member_id = ?
+          AND rm.member_type = 'officer'
+        LIMIT 1`,
+      [roomId, officerId],
+    );
+    if (!moderators.length) {
+      return res.status(403).json({ message: "You are not an officer in this room." });
     }
 
-    const position = String(sectionRows?.[0]?.position || "")
+    const position = String(moderators[0].position || "")
       .trim()
       .toLowerCase()
       .replace(/\./g, "");
@@ -38,85 +44,31 @@ router.get("/same-section", authenticateOfficer, (req, res) => {
       });
     }
 
-    const year = String(sectionRows?.[0]?.year || "").trim();
-    const section = String(sectionRows?.[0]?.section || "").trim();
+    const year = String(moderators[0].year || "").trim();
+    const section = String(moderators[0].section || "").trim();
     const hasBatch = Boolean(year && section);
-
-    const sql = hasBatch
-      ? `
-          SELECT
-            o.student_id AS id,
-            o.first_name,
-            o.last_name,
-            o.student_number,
-            o.position,
-            bo.year_name AS year,
-            bo.section_name AS section,
-            'Officer' AS member_type
-          FROM student o
-          LEFT JOIN batch bo ON bo.batch_id = o.batch_id
-          WHERE bo.year_name = ? AND bo.section_name = ? AND o.role IS NOT NULL
-
-          UNION ALL
-
-          SELECT
-            s.student_id AS id,
-            s.first_name,
-            s.last_name,
-            s.student_number,
-            s.position,
-            bs.year_name AS year,
-            bs.section_name AS section,
-            'Student' AS member_type
-          FROM student s
-          LEFT JOIN batch bs ON bs.batch_id = s.batch_id
-          WHERE s.role IS NULL AND bs.year_name = ? AND bs.section_name = ?
-
-          ORDER BY member_type ASC, first_name ASC, last_name ASC
-        `
-      : `
-          SELECT
-            o.student_id AS id,
-            o.first_name,
-            o.last_name,
-            o.student_number,
-            o.position,
-            bo.year_name AS year,
-            bo.section_name AS section,
-            'Officer' AS member_type
-          FROM student o
-          LEFT JOIN batch bo ON bo.batch_id = o.batch_id
-          WHERE o.role IS NOT NULL
-
-          UNION ALL
-
-          SELECT
-            s.student_id AS id,
-            s.first_name,
-            s.last_name,
-            s.student_number,
-            s.position,
-            bs.year_name AS year,
-            bs.section_name AS section,
-            'Student' AS member_type
-          FROM student s
-          LEFT JOIN batch bs ON bs.batch_id = s.batch_id
-          WHERE s.role IS NULL
-
-          ORDER BY member_type ASC, first_name ASC, last_name ASC
-        `;
-
-    const params = hasBatch ? [year, section, year, section] : [];
-
-    db.query(sql, params, (queryErr, results) => {
-      if (queryErr) {
-        console.error("Moderator list error:", queryErr);
-        return res.status(500).json({ message: "Database error" });
-      }
-
-      res.json(results || []);
-    });
-  });
+    const [members] = await connection.query(
+      `SELECT s.student_id AS id, s.first_name, s.last_name,
+              s.student_number, rm.position, b.year_name AS year,
+              b.section_name AS section, rm.member_type
+         FROM room_member rm
+         INNER JOIN student s ON s.student_id = rm.member_id
+         LEFT JOIN batch b ON b.batch_id = s.batch_id
+        WHERE rm.room_id = ?
+          ${hasBatch ? "AND b.year_name = ? AND b.section_name = ?" : ""}
+        ORDER BY rm.member_type ASC, s.first_name ASC, s.last_name ASC`,
+      hasBatch ? [roomId, year, section] : [roomId],
+    );
+    res.json(
+      members.map((member) => ({
+        ...member,
+        member_type: member.member_type === "officer" ? "Officer" : "Student",
+      })),
+    );
+  } catch (error) {
+    console.error("Moderator list error:", error);
+    res.status(500).json({ message: "Unable to load room members." });
+  }
 });
 
 export default router;

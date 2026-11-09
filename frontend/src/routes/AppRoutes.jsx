@@ -14,10 +14,12 @@ import StudentRoute from "../middleware/StudentRoute";
 
 // Admin Pages
 import AdminDashboard from "../pages/admin/Dashboard";
-import AdminAccount from "../pages/admin/Account";
+import AdminAccounts from "../pages/admin/Admins";
 import AdminStudents from "../pages/admin/Students";
 import AdminRoom from "../pages/admin/Room";
 import AdminRoomDetails from "../pages/admin/RoomDetails";
+import AdminEventHandler from "../pages/admin/EventHandler";
+import AdminRoomGovernanceAnnouncement from "../pages/admin/RoomGovernanceAnnouncement";
 import AdminAudit from "../pages/admin/Audit";
 import AdminLogin from "../pages/admin/Login";
 
@@ -28,14 +30,13 @@ import StudentAccount from "../pages/student/Account";
 import StudentLogin from "../pages/student/Login";
 import StudentRegister from "../pages/student/Register";
 import Quest from "../pages/Quest";
+import RoomMain from "../pages/RoomMain";
 
 // Officer Pages
 import OfficerDashboard from "../pages/officer/Dashboard";
 import OfficerAnnouncement from "../pages/officer/Announcement";
-import OfficerModerate from "../pages/officer/Moderate";
 import OfficerAccount from "../pages/officer/Account";
 import OfficerGovernanceSection from "../pages/officer/GovernanceSection";
-import OfficerAudit from "../pages/officer/Audit";
 
 const theme = createTheme();
 
@@ -57,8 +58,20 @@ export default function AppRoutes() {
               <Route element={<StudentLayout />}>
                 <Route path="home" element={<StudentHome />} />
                 <Route path="account" element={<StudentAccount />} />
-                <Route path="quest" element={<Quest />} />
-                <Route path="announcement" element={<StudentAnnouncement />} />
+                <Route
+                  path="quest"
+                  element={<Navigate to="/student/rooms/main" replace />}
+                />
+                <Route path="rooms/main" element={<RoomMain role="student" />} />
+                <Route
+                  path="rooms/:roomId/hub"
+                  element={<StudentAnnouncement />}
+                />
+                <Route path="rooms/:roomId/quests" element={<Quest />} />
+                <Route
+                  path="announcement"
+                  element={<Navigate to="/student/rooms/main" replace />}
+                />
               </Route>
             </Route>
           </Route>
@@ -73,12 +86,42 @@ export default function AppRoutes() {
                 <Route path="dashboard" element={<AdminDashboard />} />
                 <Route
                   path="account"
-                  element={<Navigate to="officials" replace />}
+                  element={<Navigate to="admins" replace />}
                 />
-                <Route path="account/officials" element={<AdminAccount />} />
+                <Route path="account/admins" element={<AdminAccounts />} />
                 <Route path="account/students" element={<AdminStudents />} />
-                <Route path="room" element={<AdminRoom />} />
-                <Route path="room/:roomId" element={<AdminRoomDetails />} />
+                <Route
+                  path="account/officials"
+                  element={<Navigate to="/admin/account/students" replace />}
+                />
+                <Route path="rooms" element={<Navigate to="main" replace />} />
+                <Route path="rooms/main" element={<AdminRoom />} />
+                <Route
+                  path="rooms/:roomId/hub"
+                  element={<AdminRoomDetails />}
+                />
+                <Route
+                  path="rooms/:roomId/governance/announcement"
+                  element={<AdminRoomGovernanceAnnouncement />}
+                />
+                <Route
+                  path="rooms/:roomId/governance/event-scheduler"
+                  element={<AdminEventHandler />}
+                />
+                <Route path="room" element={<Navigate to="/admin/rooms/main" replace />} />
+                <Route path="room/main" element={<Navigate to="/admin/rooms/main" replace />} />
+                <Route
+                  path="room/:roomId"
+                  element={<Navigate to="/admin/rooms/main" replace />}
+                />
+                <Route
+                  path="room/governance/announcement"
+                  element={<Navigate to="/admin/rooms/main" replace />}
+                />
+                <Route
+                  path="room/governance/event-handlers"
+                  element={<Navigate to="/admin/rooms/main" replace />}
+                />
                 <Route path="audit" element={<AdminAudit />} />
               </Route>
             </Route>
@@ -91,40 +134,59 @@ export default function AppRoutes() {
                 <Route index element={<Navigate to="dashboard" replace />} />
                 <Route path="dashboard" element={<OfficerDashboard />} />
                 <Route path="account" element={<OfficerAccount />} />
-                <Route path="quest" element={<Quest />} />
-                <Route path="audit" element={<OfficerAudit />} />
+                <Route
+                  path="quest"
+                  element={<Navigate to="/officer/rooms/main" replace />}
+                />
+                <Route
+                  path="audit"
+                  element={<Navigate to="/officer/rooms/main" replace />}
+                />
+                <Route path="rooms/main" element={<RoomMain role="officer" />} />
+                <Route
+                  path="rooms/:roomId/hub"
+                  element={<OfficerAnnouncement />}
+                />
+                <Route path="rooms/:roomId/quests" element={<Quest />} />
+                <Route
+                  path="rooms/:roomId/governance/:section"
+                  element={<OfficerGovernanceSection />}
+                />
                 <Route
                   path="room"
-                  element={<Navigate to="room/announcement" replace />}
+                  element={<Navigate to="/officer/rooms/main" replace />}
                 />
                 <Route
                   path="room/announcement"
-                  element={<OfficerAnnouncement />}
+                  element={<Navigate to="/officer/rooms/main" replace />}
                 />
                 <Route
                   path="room/governance/:section"
-                  element={<OfficerGovernanceSection />}
+                  element={<Navigate to="/officer/rooms/main" replace />}
                 />
-                <Route path="announcement" element={<OfficerAnnouncement />} />
+                <Route
+                  path="announcement"
+                  element={<Navigate to="/officer/rooms/main" replace />}
+                />
                 <Route
                   path="announcement/overview"
-                  element={<OfficerAnnouncement />}
+                  element={<Navigate to="/officer/rooms/main" replace />}
                 />
                 <Route
                   path="announcement/:section"
-                  element={<OfficerGovernanceSection />}
+                  element={<Navigate to="/officer/rooms/main" replace />}
                 />
                 <Route
                   path="moderate"
-                  element={<Navigate to="governance/moderate" replace />}
+                  element={<Navigate to="/officer/rooms/main" replace />}
                 />
                 <Route
                   path="governance/:section"
-                  element={<OfficerGovernanceSection />}
+                  element={<Navigate to="/officer/rooms/main" replace />}
                 />
                 <Route
                   path="governance/moderate"
-                  element={<OfficerModerate />}
+                  element={<Navigate to="/officer/rooms/main" replace />}
                 />
               </Route>
             </Route>

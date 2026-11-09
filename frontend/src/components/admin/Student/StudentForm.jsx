@@ -14,6 +14,8 @@ const emptyForm = {
   first_name: "",
   last_name: "",
   student_number: "",
+  college: "",
+  course: "",
   year: "",
   section: "",
   password: "",
@@ -40,6 +42,8 @@ export default function StudentForm({
             first_name: toText(selectedStudent.first_name),
             last_name: toText(selectedStudent.last_name),
             student_number: toText(selectedStudent.student_number),
+            college: toText(selectedStudent.college),
+            course: toText(selectedStudent.course),
             year: toText(selectedStudent.year),
             section: toText(selectedStudent.section),
             password: "",
@@ -66,6 +70,7 @@ export default function StudentForm({
       !values.first_name ||
       !values.last_name ||
       !values.student_number ||
+      !values.college ||
       !values.year ||
       !values.section
     ) {
@@ -133,6 +138,22 @@ export default function StudentForm({
               onChange={handleChange}
               disabled={loading}
               required
+            />
+            <TextField
+              label="College"
+              name="college"
+              value={formData.college}
+              onChange={handleChange}
+              disabled={loading}
+              required
+            />
+            <TextField
+              label="Course"
+              name="course"
+              value={formData.course}
+              onChange={handleChange}
+              disabled={loading}
+              inputProps={{ maxLength: 150 }}
             />
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
               <TextField

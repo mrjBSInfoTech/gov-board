@@ -22,6 +22,10 @@ export const authenticateStudent = (req, res, next) => {
         return res.status(403).json({ message: "Invalid or expired token." });
       }
 
+      if (user.admin_id) {
+        return res.status(403).json({ message: "A student session is required." });
+      }
+
       const studentId = user.student_id || user.id;
       if (!studentId) {
         return res.status(403).json({ message: "Unable to identify student." });

@@ -1,6 +1,7 @@
 import express from "express";
 import db from "../../database/db.js";
 import { authenticateOfficer } from "../../middleware/officerAuthMiddleware.js";
+import { getRoomCalendarEventPredicate } from "../../utils/shared/calendarEventScope.js";
 
 const router = express.Router();
 const DATE_TIME_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
@@ -10,18 +11,23 @@ const getDateKey = (date) =>
     date.getDate(),
   ).padStart(2, "0")}`;
 
-const getOfficerRoomId = (req, requestedRoomId, callback) => {
-  const roomId = requestedRoomId ? Number(requestedRoomId) : null;
-  if (roomId !== null && (!Number.isInteger(roomId) || roomId < 1)) {
+const getOfficerRoomId = (
+  req,
+  requestedRoomId,
+  callback,
+  allowedTypes = ["officer"],
+) => {
+  const roomId = Number(requestedRoomId);
+  if (!Number.isSafeInteger(roomId) || roomId < 1) {
     callback(null, false);
     return;
   }
   db.query(
-    `SELECT room_id FROM room_member
-      WHERE member_type = 'officer' AND member_id = ?
-        AND (? IS NULL OR room_id = ?)
+    `SELECT room_id, member_type FROM room_member
+      WHERE member_type IN (?) AND member_id = ?
+        AND room_id = ?
       ORDER BY room_id LIMIT 1`,
-    [getOfficerId(req), roomId, roomId],
+    [allowedTypes, getOfficerId(req), roomId],
     (err, rows) => {
       if (err) {
         console.error("Officer calendar room lookup error:", err);
@@ -66,15 +72,21 @@ const selectEvent = (eventId, roomId, callback) => {
 };
 
 router.get("/", authenticateOfficer, (req, res) => {
-  getOfficerRoomId(req, req.query.roomId, (roomError, roomId) => {
+  getOfficerRoomId(
+    req,
+    req.query.roomId,
+    (roomError, roomId) => {
     if (roomError) return res.status(500).json({ message: "Unable to identify the room." });
     if (!roomId) return res.status(403).json({ message: "You are not a member of this room." });
     db.query(
-      `SELECT event_id, room_id, title, description, start_at, end_at, reminder_minutes,
-              created_by, date_created, date_updated
-         FROM calendar_event WHERE room_id = ?
-          AND start_at >= CURRENT_DATE
-        ORDER BY start_at ASC, event_id ASC`,
+      `SELECT e.event_id, e.room_id, e.visibility_scope, e.college, e.title,
+              e.description, e.start_at, e.end_at, e.reminder_minutes,
+              e.created_by, e.date_created, e.date_updated
+         FROM room r
+         JOIN calendar_event e ON ${getRoomCalendarEventPredicate()}
+        WHERE r.room_id = ?
+          AND e.start_at >= CURRENT_DATE
+        ORDER BY e.start_at ASC, e.event_id ASC`,
       [roomId],
       (err, results) => {
         if (err) {
@@ -84,7 +96,9 @@ router.get("/", authenticateOfficer, (req, res) => {
         res.json(results);
       },
     );
-  });
+  },
+    ["student", "officer"],
+  );
 });
 
 router.post("/", authenticateOfficer, (req, res) => {

@@ -26,7 +26,7 @@ import {
 } from "../../api/officer/fundAPI";
 import { fetchMyRoom, fetchRoomMembers } from "../../api/roomAPI";
 
-export default function FundPage() {
+export default function FundPage({ roomId: selectedRoomId }) {
   const [room, setRoom] = useState(null);
   const [funds, setFunds] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -64,7 +64,7 @@ export default function FundPage() {
 
     const loadRoom = async () => {
       try {
-        const currentRoom = await fetchMyRoom();
+        const currentRoom = await fetchMyRoom(selectedRoomId);
         if (!active) return;
 
         setRoom(currentRoom || null);
@@ -91,7 +91,7 @@ export default function FundPage() {
     return () => {
       active = false;
     };
-  }, [loadFunds]);
+  }, [loadFunds, selectedRoomId]);
 
   const visibleFunds = useMemo(() => {
     const term = search.trim().toLowerCase();

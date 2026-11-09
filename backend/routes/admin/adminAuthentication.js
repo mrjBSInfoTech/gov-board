@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import db from "../../database/db.js";
 import { logAudit } from "../../utils/shared/auditLogger.js";
+import { PRIMARY_ADMIN_ID } from "../../utils/shared/adminScope.js";
 
 const router = express.Router();
 
@@ -21,7 +22,8 @@ router.post("/login", (req, res) => {
   }
 
   const sql = `
-    SELECT admin_id, username, password, first_name, last_name
+    SELECT admin_id, username, password, first_name, last_name, position, college,
+      can_edit_students
     FROM admin
     WHERE username = ?
     LIMIT 1`;
@@ -62,13 +64,21 @@ router.post("/login", (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    if (!user) {
-      return res.status(401).json({ message: "Invalid credentials" });
+    if (
+      user.position === "Super Admin" &&
+      Number(user.admin_id) !== PRIMARY_ADMIN_ID
+    ) {
+      return res.status(403).json({
+        message: "Only the primary admin can be a Super Admin.",
+      });
     }
-
-
-    if (!isMatch) {
-      return res.status(401).json({ message: "Invalid credentials" });
+    if (
+      !["Governor", "College Head", "Super Admin"].includes(user.position) ||
+      (user.position !== "Super Admin" && !user.college?.trim())
+    ) {
+      return res.status(403).json({
+        message: "Admin account needs a valid position and college assignment.",
+      });
     }
 
     const token = jwt.sign(
@@ -78,6 +88,9 @@ router.post("/login", (req, res) => {
         first_name: user.first_name,
         last_name: user.last_name,
         username: user.username,
+        position: user.position,
+        college: user.college,
+        can_edit_students: Boolean(user.can_edit_students),
       },
       process.env.JWT_SECRET,
       { expiresIn: "10d" },
@@ -96,6 +109,9 @@ router.post("/login", (req, res) => {
       username: user.username,
       first_name: user.first_name,
       last_name: user.last_name,
+      position: user.position,
+      college: user.college,
+      can_edit_students: Boolean(user.can_edit_students),
     });
   });
 });

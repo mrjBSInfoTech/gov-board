@@ -13,7 +13,7 @@ import {
 import { createAccountApi } from "../../api/accountAPI";
 
 export default function AccountSettings({ role, onProfileUpdated }) {
-  const [account] = useState(() => ({ first_name: "", last_name: "", student_number: "" }));
+  const [account] = useState(() => ({ first_name: "", last_name: "", student_number: "", course: "" }));
   const [profile, setProfile] = useState(account);
   const [password, setPassword] = useState({ current_password: "", new_password: "", confirm_password: "" });
   const [loading, setLoading] = useState(true);
@@ -34,8 +34,9 @@ export default function AccountSettings({ role, onProfileUpdated }) {
     setMessage(null);
     try {
       const updated = await api.updateAccount(profile);
-      setProfile(updated);
-      onProfileUpdated?.(updated);
+      const nextProfile = { ...profile, ...updated };
+      setProfile(nextProfile);
+      onProfileUpdated?.(nextProfile);
       setMessage({ type: "success", text: "Personal information updated." });
     } catch (error) {
       setMessage({ type: "error", text: error.message });
@@ -76,6 +77,8 @@ export default function AccountSettings({ role, onProfileUpdated }) {
               <TextField label="First name" value={profile.first_name} onChange={(event) => setProfile({ ...profile, first_name: event.target.value })} required />
               <TextField label="Last name" value={profile.last_name} onChange={(event) => setProfile({ ...profile, last_name: event.target.value })} required />
               <TextField label="Student number" value={profile.student_number} onChange={(event) => setProfile({ ...profile, student_number: event.target.value })} required />
+              <TextField label="College" value={profile.college || ""} disabled helperText="Contact an administrator if your college needs to be changed." />
+              <TextField label="Course" value={profile.course || ""} onChange={(event) => setProfile({ ...profile, course: event.target.value })} inputProps={{ maxLength: 150 }} />
               <Button type="submit" variant="contained" disabled={saving}>Save changes</Button>
             </Stack>
           </Box>

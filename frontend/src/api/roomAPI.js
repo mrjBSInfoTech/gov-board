@@ -48,9 +48,38 @@ export const fetchRoomMembers = async (roomId) => {
   }
 };
 
-export const fetchMyRoom = async () => {
+export const fetchMyRoom = async (requestedRoomId) => {
   try {
-    const response = await api.get("/my-room");
+    let roomId = requestedRoomId;
+    if (roomId === undefined) {
+      const studentId = localStorage.getItem("student_student_id");
+      const studentRoom = studentId
+        ? localStorage.getItem(`studentJoinedRoom:${studentId}`)
+        : null;
+      const officerRoom = localStorage.getItem("joinedRoom");
+      const authSection = localStorage.getItem("auth_section");
+      const savedRoom =
+        authSection === "officer" ||
+        (!authSection && localStorage.getItem("officer_token") && !studentRoom)
+          ? officerRoom
+          : studentRoom || officerRoom;
+      roomId = savedRoom ? JSON.parse(savedRoom)?.room_id : null;
+    } else if (!Number.isSafeInteger(Number(roomId)) || Number(roomId) < 1) {
+      throw new Error("A valid room is required.");
+    }
+
+    const response = await api.get("/my-room", {
+      params: roomId ? { roomId } : undefined,
+    });
+    return response.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+
+export const fetchMyRooms = async () => {
+  try {
+    const response = await api.get("/my-rooms");
     return response.data;
   } catch (error) {
     handleError(error);

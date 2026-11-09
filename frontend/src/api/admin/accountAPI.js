@@ -45,9 +45,60 @@ export const fetchAccounts = async () => {
     handleError(error);
   }
 };
-export const demoteAccount = async (id) => {
+
+export const fetchAdminAccounts = async () => {
   try {
-    const res = await api.post(`/accounts/${id}/demote`);
+    const res = await api.get("/accounts/admins");
+    return res.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+
+export const addAdminAccount = async (formData) => {
+  try {
+    const res = await api.post("/accounts/admins", formData);
+    return res.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+
+export const updateAdminAccount = async (id, formData) => {
+  try {
+    const res = await api.put(`/accounts/admins/${id}`, formData);
+    return res.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+
+export const updateGovernorStudentEditPermission = async (id, enabled) => {
+  try {
+    const res = await api.patch(`/accounts/admins/${id}/student-edit-permission`, {
+      can_edit_students: enabled,
+    });
+    return res.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+
+export const deleteAdminAccount = async (id) => {
+  try {
+    const res = await api.delete(`/accounts/admins/${id}`);
+    return res.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+
+export const demoteAccount = async (id, roomId = null) => {
+  try {
+    const res = await api.post(
+      `/accounts/${id}/demote`,
+      roomId ? { roomId } : {},
+    );
     return res.data;
   } catch (error) {
     handleError(error);

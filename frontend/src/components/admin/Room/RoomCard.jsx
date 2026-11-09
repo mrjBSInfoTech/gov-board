@@ -14,13 +14,13 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useNavigate } from "react-router-dom";
 
-function RoomCard({ room, index, onEdit, onDelete, onCopy, copied }) {
+function RoomCard({ room, onEdit, onDelete, onCopy, copied }) {
   const navigate = useNavigate();
 
   return (
     <Card
       variant="outlined"
-      onClick={() => navigate(`/admin/room/${room.room_id}`)}
+      onClick={() => navigate(`/admin/rooms/${room.room_id}/hub`)}
       sx={{
         borderRadius: 2,
         height: "100%",
@@ -36,6 +36,19 @@ function RoomCard({ room, index, onEdit, onDelete, onCopy, copied }) {
         <Typography variant="subtitle1" fontWeight="bold" noWrap>
           {room.room_name}
         </Typography>
+        <Typography variant="caption" color="text.secondary">
+          {room.college || "Unassigned college"}
+        </Typography>
+        {room.description && (
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mt: 1 }}
+            title={room.description}
+          >
+            {room.description}
+          </Typography>
+        )}
 
         {/* Room Code */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>

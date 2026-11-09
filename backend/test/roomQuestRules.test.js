@@ -4,7 +4,10 @@ import {
   getQuestDateKey,
   getRoomLevelProgress,
 } from "../utils/shared/roomQuestRules.js";
-import { isRoomMember } from "../utils/shared/roomMembership.js";
+import {
+  hasRoomMembership,
+  isRoomMember,
+} from "../utils/shared/roomMembership.js";
 
 test("daily quest date changes at 4:00 AM in the configured timezone", () => {
   assert.equal(
@@ -72,4 +75,30 @@ test("room membership is isolated by room for both members", async () => {
   assert.equal(await isRoomMember(database, 20, 101, "student"), false);
   assert.equal(await isRoomMember(database, 20, 202, "officer"), true);
   assert.equal(await isRoomMember(database, 10, 202, "officer"), false);
+});
+
+test("room access accepts either room-specific member type without crossing rooms", async () => {
+  const memberships = [
+    { room_id: 10, member_id: 101, member_type: "student" },
+    { room_id: 20, member_id: 101, member_type: "officer" },
+  ];
+  const database = {
+    promise: () => ({
+      query: async (sql, [roomId, memberId]) => {
+        assert.match(sql, /WHERE room_id = \? AND member_id = \? LIMIT 1/);
+        return [
+          memberships.filter(
+            (membership) =>
+              membership.room_id === roomId &&
+              membership.member_id === memberId,
+          ),
+        ];
+      },
+    }),
+  };
+
+  assert.equal(await hasRoomMembership(database, 10, 101), true);
+  assert.equal(await hasRoomMembership(database, 20, 101), true);
+  assert.equal(await hasRoomMembership(database, 30, 101), false);
+  assert.equal(await hasRoomMembership(database, 10, 202), false);
 });

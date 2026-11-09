@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
 import {
   Alert,
@@ -28,14 +28,19 @@ export default function Dashboard() {
   const [openRoomDelete, setOpenRoomDelete] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
-  const [roomErrorMessage, setRoomErrorMessage] = useState("");
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [snackbarSeverity, setSnackbarSeverity] = useState("success");
   const [loading, setLoading] = useState(true);
 
+  const showSnackbar = useCallback((message, severity = "success") => {
+    setSnackbarMessage(message);
+    setSnackbarSeverity(severity);
+    setSnackbarOpen(true);
+  }, []);
+
   // Fetch all rooms from API
-  const loadRooms = async () => {
+  const loadRooms = useCallback(async () => {
     try {
       setLoading(true);
       const data = await fetchRooms();
@@ -46,12 +51,12 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showSnackbar]);
 
   // Load rooms
   useEffect(() => {
-    loadRooms();
-  }, []);
+    void loadRooms();
+  }, [loadRooms]);
 
   // ========== ROOM HANDLERS ==========
   // ➕ Open Add Room Modal
@@ -91,6 +96,7 @@ export default function Dashboard() {
         showSnackbar("Room added successfully", "success");
       }
       await loadRooms();
+      window.dispatchEvent(new Event("admin-rooms-updated"));
       setOpenRoomForm(false);
     } catch (err) {
       console.error("Error saving room:", err);
@@ -103,6 +109,7 @@ export default function Dashboard() {
     try {
       await deleteRoom(id);
       await loadRooms();
+      window.dispatchEvent(new Event("admin-rooms-updated"));
       setOpenRoomDelete(false);
       showSnackbar("Room deleted successfully", "success");
     } catch (err) {
@@ -112,12 +119,6 @@ export default function Dashboard() {
   };
 
   // Snackbar handlers
-  const showSnackbar = (message, severity = "success") => {
-    setSnackbarMessage(message);
-    setSnackbarSeverity(severity);
-    setSnackbarOpen(true);
-  };
-
   const closeSnackbar = (event, reason) => {
     if (reason === "clickaway") return;
     setSnackbarOpen(false);
@@ -137,7 +138,7 @@ export default function Dashboard() {
   return (
     <Box sx={{ p: 3 }}>
       <Helmet titleTemplate="%s - GovBoard">
-        <title>Room</title>
+        <title>Rooms</title>
       </Helmet>
       <Box
         sx={{
@@ -206,11 +207,10 @@ export default function Dashboard() {
           </Box>
         ) : (
           <Grid container spacing={2.5}>
-            {rooms.map((room, index) => (
+            {rooms.map((room) => (
               <Grid item xs={12} sm={6} md={4} lg={3} key={room.room_id}>
                 <RoomCard
                   room={room}
-                  index={index}
                   onEdit={handleOpenRoomEdit}
                   onDelete={handleOpenRoomDelete}
                   onCopy={handleCopyCode}

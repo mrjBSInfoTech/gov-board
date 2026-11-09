@@ -5,6 +5,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { authenticateOfficer } from "../../middleware/officerAuthMiddleware.js";
+import { findRoomByCode } from "../../utils/shared/roomJoin.js";
 
 const router = express.Router();
 
@@ -48,12 +49,46 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage });
+const removeUploadedFile = (file) => {
+  if (!file) return;
+  fs.unlink(file.path, (error) => {
+    if (error && error.code !== "ENOENT") {
+      console.error("Unable to remove rejected announcement upload:", error);
+    }
+  });
+};
 
-// 🟢 Get all announcements (optionally filter by room_id)
-router.get("/", authenticateOfficer, (req, res) => {
-  const { roomId } = req.query;
+const requireRoomMembership = (getRoomId, allowedTypes) => (req, res, next) => {
+  const roomId = Number(getRoomId(req));
+  const memberId = Number(req.user.officer_id);
+  if (!Number.isSafeInteger(roomId) || roomId < 1) {
+    return res.status(400).json({ error: "A valid roomId is required." });
+  }
+  db.query(
+    `SELECT member_type FROM room_member
+      WHERE room_id = ? AND member_id = ? LIMIT 1`,
+    [roomId, memberId],
+    (err, rows) => {
+      if (err) {
+        console.error("Room membership lookup error:", err);
+        return res.status(500).json({ error: "Unable to verify room membership." });
+      }
+      if (!rows.length || !allowedTypes.includes(rows[0].member_type)) {
+        return res.status(403).json({ error: "You do not have access to this room." });
+      }
+      req.roomId = roomId;
+      req.roomMemberType = rows[0].member_type;
+      next();
+    },
+  );
+};
 
-  let sql = `
+router.get(
+  "/",
+  authenticateOfficer,
+  requireRoomMembership((req) => req.query.roomId, ["student", "officer"]),
+  (req, res) => {
+    const sql = `
     SELECT 
       announcement_id,
       room_id,
@@ -62,128 +97,95 @@ router.get("/", authenticateOfficer, (req, res) => {
       image,
       date_created
     FROM announcement
-  `;
-  const params = [];
+    WHERE room_id = ?
+    ORDER BY date_created DESC, announcement_id DESC`;
 
-  if (roomId) {
-    sql += ` WHERE room_id = ? `;
-    params.push(roomId);
-  }
-
-  sql += ` ORDER BY date_created DESC, announcement_id DESC`;
-
-  db.query(sql, params, (err, results) => {
-    if (err) {
-      console.error("DB Error:", err);
-      return res.status(500).json({ error: err.message });
-    }
-    res.json(results);
-  });
-});
+    db.query(sql, [req.roomId], (err, results) => {
+      if (err) {
+        console.error("DB Error:", err);
+        return res.status(500).json({ error: "Unable to load announcements." });
+      }
+      res.json(results);
+    });
+  },
+);
 
 // 🏢 Validate room code
-router.get("/room/validate/:roomNumber", authenticateOfficer, (req, res) => {
-  const { roomNumber } = req.params;
-  const sql = `SELECT room_id, room_number, room_name FROM room WHERE room_number = ?`;
-  
-  db.query(sql, [roomNumber.trim()], (err, results) => {
-    if (err) {
-      console.error("DB Error:", err);
-      return res.status(500).json({ error: err.message });
-    }
-    if (results.length === 0) {
+router.get("/room/validate/:roomNumber", authenticateOfficer, async (req, res) => {
+  const officerId = Number(req.user.officer_id);
+  if (!Number.isSafeInteger(officerId) || officerId < 1) {
+    return res.status(403).json({ error: "Unable to identify officer" });
+  }
+
+  const connection = db.promise();
+  try {
+    await connection.beginTransaction();
+    const room = await findRoomByCode(connection, req.params.roomNumber);
+    if (!room) {
+      await connection.rollback();
       return res.status(404).json({ error: "Room not found. Please check the code." });
     }
 
-    const officerId = req.user.officer_id;
-    const connection = db.promise();
-    connection.beginTransaction()
-      .then(() => connection.query(
-        "DELETE FROM room_member WHERE member_type = 'officer' AND member_id = ?",
-        [officerId],
-      ))
-      .then(() => connection.query(
-        `UPDATE student
-         SET position = 'Student', role = NULL,
-             can_add = 0, can_edit = 0, can_delete = 0, can_moderate = 0
-         WHERE student_id = ?`,
-        [officerId],
-      ))
-      .then(() => connection.query(
-        `INSERT INTO room_member (room_id, member_type, member_id)
-         VALUES (?, 'student', ?)
-         ON DUPLICATE KEY UPDATE member_type = 'student'`,
-        [results[0].room_id, officerId],
-      ))
-      .then(() => connection.commit())
-      .then(() => res.json(results[0]))
-      .catch(async (error) => {
-        try {
-          await connection.rollback();
-        } catch (rollbackError) {
-          console.error("Room switch rollback error:", rollbackError);
-        }
-        console.error("Room switch error:", error);
-        return res.status(500).json({ error: "Unable to join room" });
-      });
-  });
+    await connection.query(
+      "DELETE FROM room_member WHERE room_id = ? AND member_id = ?",
+      [room.room_id, officerId],
+    );
+    await connection.query(
+      `INSERT INTO room_member (room_id, member_type, member_id, position)
+       VALUES (?, 'student', ?, 'Student')`,
+      [room.room_id, officerId],
+    );
+    await connection.commit();
+    req.auditRoomId = room.room_id;
+    res.json({
+      ...room,
+      member_type: "student",
+      position: "Student",
+    });
+  } catch (error) {
+    try {
+      await connection.rollback();
+    } catch (rollbackError) {
+      console.error("Officer room join rollback error:", rollbackError);
+    }
+    console.error("Officer room join error:", error);
+    res.status(500).json({ error: "Unable to join room" });
+  }
 });
 
-// Leave the current room and return the officer account to a regular student.
 router.delete("/room", authenticateOfficer, (req, res) => {
   const officerId = req.user.officer_id;
-  const connection = db.promise();
+  const roomId = Number(req.body?.roomId);
+  if (!Number.isSafeInteger(roomId) || roomId < 1) {
+    return res.status(400).json({ error: "A valid room is required." });
+  }
 
-  connection.beginTransaction()
-    .then(() => connection.query(
-      "DELETE FROM room_member WHERE member_type = 'officer' AND member_id = ?",
-      [officerId],
-    ))
-    .then(([result]) => {
+  db.query(
+    "DELETE FROM room_member WHERE room_id = ? AND member_id = ?",
+    [roomId, officerId],
+    (err, result) => {
+      if (err) {
+        console.error("Officer leave room error:", err);
+        return res.status(500).json({ error: "Unable to leave room" });
+      }
       if (result.affectedRows === 0) {
-        const error = new Error("Room membership not found");
-        error.statusCode = 404;
-        throw error;
-      }
-      return connection.query(
-        `UPDATE student
-         SET position = 'Student', role = NULL,
-             can_add = 0, can_edit = 0, can_delete = 0, can_moderate = 0
-         WHERE student_id = ?`,
-        [officerId],
-      );
-    })
-    .then(() => connection.commit())
-    .then(() => res.json({ message: "You left the room and are now a student." }))
-    .catch(async (error) => {
-      try {
-        await connection.rollback();
-      } catch (rollbackError) {
-        console.error("Officer leave rollback error:", rollbackError);
-      }
-      if (error.statusCode === 404) {
         return res.status(404).json({ error: "Room membership not found" });
       }
-      console.error("Officer leave room error:", error);
-      return res.status(500).json({ error: "Unable to leave room" });
-    });
+      res.json({ message: "You left the room." });
+    },
+  );
 });
 
-// 🔍 Get single announcement by ID
 router.get("/:id", authenticateOfficer, (req, res) => {
   const { id } = req.params;
   const sql = `
-    SELECT 
-      announcement_id,
-      room_id,
-      announcement_body,
-      link,
-      image,
-      date_created
-    FROM announcement
-    WHERE announcement_id = ?
+    SELECT a.announcement_id, a.room_id, a.announcement_body, a.link,
+           a.image, a.date_created
+      FROM announcement a
+      INNER JOIN room_member rm ON rm.room_id = a.room_id
+     WHERE a.announcement_id = ? AND rm.member_id = ?
   `;
-  db.query(sql, [id], (err, results) => {
+  db.query(sql, [id, req.user.officer_id], (err, results) => {
     if (err) {
       console.error("DB Error:", err);
       return res.status(500).json({ error: err.message });
@@ -195,12 +197,17 @@ router.get("/:id", authenticateOfficer, (req, res) => {
   });
 });
 
-// ➕ Add new announcement
-router.post("/", authenticateOfficer, upload.single("file"), (req, res) => {
-  const { announcement_body, link, room_id } = req.body;
+router.post(
+  "/",
+  authenticateOfficer,
+  requireRoomMembership((req) => req.query.roomId || req.body?.room_id, ["officer"]),
+  upload.single("file"),
+  (req, res) => {
+  const { announcement_body, link } = req.body;
 
   // Validate required fields
   if (!announcement_body || !announcement_body.trim()) {
+    removeUploadedFile(req.file);
     return res.status(400).json({ error: "Announcement body is required" });
   }
 
@@ -219,10 +226,11 @@ router.post("/", authenticateOfficer, upload.single("file"), (req, res) => {
       announcement_body.trim(),
       link?.trim() || null,
       imageName,
-      room_id || null,
+      req.roomId,
     ],
     (err, result) => {
       if (err) {
+        removeUploadedFile(req.file);
         console.error("DB Error:", err);
         return res.status(500).json({ error: err.message });
       }
@@ -233,104 +241,114 @@ router.post("/", authenticateOfficer, upload.single("file"), (req, res) => {
       });
     }
   );
-});
+  },
+);
 
-// ✏️ Update announcement
-router.put("/:id", authenticateOfficer, upload.single("file"), (req, res) => {
+router.put(
+  "/:id",
+  authenticateOfficer,
+  requireRoomMembership((req) => req.query.roomId || req.body?.room_id, ["officer"]),
+  upload.single("file"),
+  (req, res) => {
   const { id } = req.params;
   const { announcement_body, link, room_id } = req.body;
 
   // Validate required fields
   if (!announcement_body || !announcement_body.trim()) {
+    removeUploadedFile(req.file);
     return res.status(400).json({ error: "Announcement body is required" });
   }
 
-  // If new file is uploaded, delete old image file from storage
-  if (req.file) {
-    db.query(
-      "SELECT image FROM announcement WHERE announcement_id = ?",
-      [id],
-      (err, results) => {
-        if (results && results[0]?.image) {
-          const oldImagePath = path.join(uploadDir, results[0].image);
-          if (fs.existsSync(oldImagePath)) {
-            try {
-              fs.unlinkSync(oldImagePath);
-              console.log("Deleted old image:", results[0].image);
-            } catch (unlinkErr) {
-              console.error("Error deleting old image:", unlinkErr);
-            }
-          }
-        }
-      }
-    );
+  const imageName = req.file ? req.file.filename : null;
+  if (room_id && Number(room_id) !== req.roomId) {
+    removeUploadedFile(req.file);
+    return res.status(400).json({ error: "An announcement cannot be moved between rooms." });
   }
 
-  const imageName = req.file ? req.file.filename : null;
-  console.log("Updated announcement image:", imageName || "(no change)");
-
-  const sql = `
-    UPDATE announcement 
-    SET 
-      announcement_body = ?, 
-      link = ?, 
-      image = COALESCE(?, image), 
-      room_id = COALESCE(?, room_id)
-    WHERE announcement_id = ?
-  `;
-
-  db.query(
-    sql,
-    [
-      announcement_body.trim(),
-      link?.trim() || null,
-      imageName,
-      room_id || null,
-      id,
-    ],
-    (err) => {
-      if (err) {
-        console.error("DB Error:", err);
-        return res.status(500).json({ error: err.message });
-      }
-      res.json({ message: "Announcement updated successfully" });
+  const selectSql = `
+    SELECT image FROM announcement
+     WHERE announcement_id = ? AND room_id = ? LIMIT 1`;
+  db.query(selectSql, [id, req.roomId], (lookupError, rows) => {
+    if (lookupError) {
+      removeUploadedFile(req.file);
+      console.error("Announcement lookup error:", lookupError);
+      return res.status(500).json({ error: "Unable to update announcement." });
     }
-  );
-});
+    if (!rows.length) {
+      removeUploadedFile(req.file);
+      return res.status(404).json({ error: "Announcement not found in this room." });
+    }
 
-// 🗑️ Delete announcement
-router.delete("/:id", authenticateOfficer, (req, res) => {
+    db.query(
+      `UPDATE announcement
+          SET announcement_body = ?, link = ?, image = COALESCE(?, image)
+        WHERE announcement_id = ? AND room_id = ?`,
+      [announcement_body.trim(), link?.trim() || null, imageName, id, req.roomId],
+      (err) => {
+        if (err) {
+          removeUploadedFile(req.file);
+          console.error("Announcement update error:", err);
+          return res.status(500).json({ error: "Unable to update announcement." });
+        }
+        if (req.file && rows[0].image) {
+          const oldImagePath = path.join(uploadDir, rows[0].image);
+          fs.unlink(oldImagePath, (unlinkError) => {
+            if (unlinkError && unlinkError.code !== "ENOENT") {
+              console.error("Unable to remove replaced announcement image:", unlinkError);
+            }
+          });
+        }
+        res.json({ message: "Announcement updated successfully" });
+      },
+    );
+  });
+  },
+);
+
+router.delete(
+  "/:id",
+  authenticateOfficer,
+  requireRoomMembership((req) => req.query.roomId, ["officer"]),
+  (req, res) => {
   const { id } = req.params;
 
   db.query(
-    "SELECT image FROM announcement WHERE announcement_id = ?",
-    [id],
-    (err, results) => {
-      if (results && results[0]?.image) {
-        const imagePath = path.join(uploadDir, results[0].image);
-        if (fs.existsSync(imagePath)) {
-          try {
-            fs.unlinkSync(imagePath);
-            console.log("Deleted image:", results[0].image);
-          } catch (unlinkErr) {
-            console.error("Error deleting image:", unlinkErr);
-          }
-        }
+    "SELECT image FROM announcement WHERE announcement_id = ? AND room_id = ?",
+    [id, req.roomId],
+    (lookupError, results) => {
+      if (lookupError) {
+        console.error("Announcement lookup before deletion error:", lookupError);
+        return res.status(500).json({ error: "Unable to delete announcement." });
+      }
+      if (!results.length) {
+        return res.status(404).json({ error: "Announcement not found in this room." });
       }
 
       db.query(
-        "DELETE FROM announcement WHERE announcement_id = ?",
-        [id],
-        (err) => {
+        "DELETE FROM announcement WHERE announcement_id = ? AND room_id = ?",
+        [id, req.roomId],
+        (err, result) => {
           if (err) {
-            console.error("DB Error:", err);
-            return res.status(500).json({ error: err.message });
+            console.error("Announcement deletion error:", err);
+            return res.status(500).json({ error: "Unable to delete announcement." });
+          }
+          if (!result.affectedRows) {
+            return res.status(404).json({ error: "Announcement not found in this room." });
+          }
+          if (results[0].image) {
+            const imagePath = path.join(uploadDir, results[0].image);
+            fs.unlink(imagePath, (unlinkError) => {
+              if (unlinkError && unlinkError.code !== "ENOENT") {
+                console.error("Unable to remove deleted announcement image:", unlinkError);
+              }
+            });
           }
           res.json({ message: "Announcement deleted successfully" });
-        }
+        },
       );
-    }
+    },
   );
-});
+  },
+);
 
 export default router;

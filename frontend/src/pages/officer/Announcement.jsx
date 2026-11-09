@@ -1,13 +1,18 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Helmet } from "react-helmet-async";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   Alert,
   Box,
   Button,
   CircularProgress,
+  FormControl,
   Grid,
+  InputLabel,
   InputAdornment,
+  MenuItem,
   Paper,
+  Select,
   Snackbar,
   TextField,
   Typography,
@@ -31,7 +36,7 @@ import {
   updateAnnouncement,
   deleteAnnouncement,
 } from "../../api/officer/announcementAPI";
-import { fetchMyRoom } from "../../api/roomAPI";
+import { fetchMyRoom, fetchMyRooms } from "../../api/roomAPI";
 import RoomLevelBar from "../../components/room/RoomLevelBar";
 
 // Slide Transition for Snackbar
@@ -40,16 +45,31 @@ function SlideTransition(props) {
 }
 
 export default function AnnouncementPage() {
+  const { roomId: routeRoomId } = useParams();
+  const isRoomHub = Boolean(routeRoomId);
+  const roomIdFromRoute = Number(routeRoomId);
+  const navigate = useNavigate();
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [roomContextLoading, setRoomContextLoading] = useState(isRoomHub);
+  const [resolvedRoomId, setResolvedRoomId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
 
   // Room states
   const [joinedRoom, setJoinedRoom] = useState(() => {
+    if (routeRoomId) return null;
     const savedRoom = localStorage.getItem("joinedRoom");
     return savedRoom ? JSON.parse(savedRoom) : null;
   });
+  const activeRoomId = useRef(joinedRoom?.room_id);
+  activeRoomId.current = isRoomHub ? roomIdFromRoute : joinedRoom?.room_id;
+  const hasCurrentRoom = Boolean(
+    joinedRoom &&
+      (!isRoomHub || Number(joinedRoom.room_id) === roomIdFromRoute),
+  );
+  const [myRooms, setMyRooms] = useState([]);
+  const canManageAnnouncements = joinedRoom?.member_type === "officer";
   const [roomCodeInput, setRoomCodeInput] = useState("");
   const [roomLoading, setRoomLoading] = useState(false);
 
@@ -87,34 +107,72 @@ export default function AnnouncementPage() {
     setError(null);
     try {
       const data = await fetchAnnouncements(roomId);
-      setAnnouncements(data || []);
+      if (activeRoomId.current === roomId) setAnnouncements(data || []);
     } catch (err) {
       console.error("Error loading announcements:", err);
-      setError(err.message || "Failed to load announcements.");
+      if (activeRoomId.current === roomId) {
+        setError(err.message || "Failed to load announcements.");
+      }
     } finally {
-      setLoading(false);
+      if (activeRoomId.current === roomId) setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (joinedRoom) {
+    if (
+      joinedRoom &&
+      (!isRoomHub || Number(joinedRoom.room_id) === roomIdFromRoute)
+    ) {
       loadAnnouncements(joinedRoom.room_id);
+    } else {
+      setAnnouncements([]);
+      setLoading(false);
     }
-  }, [joinedRoom]);
+  }, [joinedRoom, isRoomHub, roomIdFromRoute]);
 
   useEffect(() => {
     let active = true;
-    fetchMyRoom()
-      .then((room) => {
+    if (isRoomHub) {
+      setRoomContextLoading(true);
+      setJoinedRoom(null);
+      setAnnouncements([]);
+      setError(null);
+      fetchMyRoom(roomIdFromRoute)
+        .then((room) => {
+          if (!active) return;
+          setResolvedRoomId(routeRoomId);
+          if (!room) {
+            setError("You are not a member of this room.");
+            return;
+          }
+          setJoinedRoom(room);
+          localStorage.setItem("joinedRoom", JSON.stringify(room));
+        })
+        .catch((loadError) => {
+          if (active) {
+            setResolvedRoomId(routeRoomId);
+            setError(loadError.message || "Unable to load this room.");
+          }
+        })
+        .finally(() => {
+          if (active) setRoomContextLoading(false);
+        });
+      return () => {
+        active = false;
+      };
+    }
+
+    Promise.all([fetchMyRoom(), fetchMyRooms()])
+      .then(([room, rooms]) => {
         if (!active) return;
-        if (!room) {
-          setJoinedRoom(null);
+        setMyRooms(rooms);
+        const selectedRoom = room || rooms[0] || null;
+        setJoinedRoom(selectedRoom);
+        if (selectedRoom) {
+          localStorage.setItem("joinedRoom", JSON.stringify(selectedRoom));
+        } else {
           localStorage.removeItem("joinedRoom");
-          window.dispatchEvent(new Event("room-membership-updated"));
-          return;
         }
-        setJoinedRoom(room);
-        localStorage.setItem("joinedRoom", JSON.stringify(room));
         window.dispatchEvent(new Event("room-membership-updated"));
       })
       .catch(() => {
@@ -125,7 +183,7 @@ export default function AnnouncementPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [isRoomHub, roomIdFromRoute, routeRoomId]);
 
   const handleJoinRoom = async (e) => {
     e.preventDefault();
@@ -136,7 +194,9 @@ export default function AnnouncementPage() {
     try {
       const room = await validateRoomCode(roomCodeInput.trim());
       setJoinedRoom(room);
+      setAnnouncements([]);
       localStorage.setItem("joinedRoom", JSON.stringify(room));
+      setMyRooms(await fetchMyRooms());
       window.dispatchEvent(new Event("room-membership-updated"));
       showSnackbar(`Joined room: ${room.room_name}`, "success");
     } catch (err) {
@@ -149,19 +209,34 @@ export default function AnnouncementPage() {
   const handleLeaveRoom = async () => {
     setLeaveLoading(true);
     try {
-      await leaveRoom();
+      await leaveRoom(joinedRoom?.room_id);
       setLeaveDialogOpen(false);
-      setJoinedRoom(null);
-      localStorage.removeItem("joinedRoom");
+      const rooms = await fetchMyRooms();
+      const nextRoom = rooms[0] || null;
+      setMyRooms(rooms);
+      setJoinedRoom(nextRoom);
+      if (nextRoom) localStorage.setItem("joinedRoom", JSON.stringify(nextRoom));
+      else localStorage.removeItem("joinedRoom");
       setAnnouncements([]);
       setRoomCodeInput("");
       window.dispatchEvent(new Event("room-membership-updated"));
-      showSnackbar("You left the room and are now a student.", "success");
+      showSnackbar(nextRoom ? `You left the room. Switched to ${nextRoom.room_name}.` : "You left the room.", "success");
     } catch (err) {
       setError(err.message || "Unable to leave room.");
     } finally {
       setLeaveLoading(false);
     }
+  };
+
+  const handleRoomChange = (event) => {
+    const room = myRooms.find(
+      (item) => item.room_id === Number(event.target.value),
+    );
+    if (!room) return;
+    setJoinedRoom(room);
+    setAnnouncements([]);
+    localStorage.setItem("joinedRoom", JSON.stringify(room));
+    window.dispatchEvent(new Event("room-membership-updated"));
   };
 
   // Handlers for Form
@@ -219,7 +294,7 @@ export default function AnnouncementPage() {
   const handleDeleteConfirm = async (id) => {
     setDeleteLoading(true);
     try {
-      await deleteAnnouncement(id);
+      await deleteAnnouncement(id, joinedRoom.room_id);
       showSnackbar("Announcement deleted successfully!", "success");
       handleCloseDeleteDialog();
       await loadAnnouncements(joinedRoom.room_id);
@@ -244,7 +319,7 @@ export default function AnnouncementPage() {
   return (
     <Box sx={{ p: { xs: 2, md: 3 } }}>
       <Helmet titleTemplate="%s - GovBoard">
-        <title>Announcements</title>
+        <title>{isRoomHub ? "Hub" : "Announcements"}</title>
       </Helmet>
 
       {/* Header section */}
@@ -263,17 +338,79 @@ export default function AnnouncementPage() {
             variant="h4"
             sx={{ fontWeight: "bold", fontSize: { xs: 24, sm: 32 } }}
           >
-            Announcements {joinedRoom && `- ${joinedRoom.room_name}`}
+            {isRoomHub
+              ? `Hub${hasCurrentRoom ? ` - ${joinedRoom.room_name}` : ""}`
+              : `Announcements${hasCurrentRoom ? ` - ${joinedRoom.room_name}` : ""}`}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {joinedRoom
-              ? `Managing announcements for room ${joinedRoom.room_number}`
-              : "Join a room to manage and post announcements"}
+            {hasCurrentRoom
+              ? canManageAnnouncements
+                ? `Managing announcements for room ${joinedRoom.room_number}`
+                : `Viewing announcements for room ${joinedRoom.room_number} as a student member`
+              : isRoomHub
+                ? "Loading room details"
+                : "Join a room to manage and post announcements"}
           </Typography>
         </Box>
 
-        {joinedRoom && (
-          <Box sx={{ display: "flex", gap: 2 }}>
+        {isRoomHub && (
+          <Button
+            variant="outlined"
+            onClick={() => navigate("/officer/rooms/main")}
+          >
+            All Rooms
+          </Button>
+        )}
+
+        {joinedRoom && !isRoomHub && (
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: { xs: "column", sm: "row" },
+              flexWrap: "wrap",
+              alignItems: { sm: "center" },
+              gap: 1,
+              width: { xs: "100%", sm: "auto" },
+            }}
+          >
+            {myRooms.length > 1 && (
+              <FormControl size="small" sx={{ minWidth: 220 }}>
+                <InputLabel id="officer-room-picker-label">Your rooms</InputLabel>
+                <Select
+                  labelId="officer-room-picker-label"
+                  value={joinedRoom.room_id}
+                  label="Your rooms"
+                  onChange={handleRoomChange}
+                >
+                  {myRooms.map((room) => (
+                    <MenuItem key={room.room_id} value={room.room_id}>
+                      {room.room_name} ({room.member_type})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+            <Box
+              component="form"
+              onSubmit={handleJoinRoom}
+              sx={{ display: "flex", gap: 1 }}
+            >
+              <TextField
+                size="small"
+                label="Join another room"
+                value={roomCodeInput}
+                onChange={(event) => setRoomCodeInput(event.target.value)}
+                disabled={roomLoading}
+                sx={{ width: { xs: 170, sm: 190 } }}
+              />
+              <Button
+                type="submit"
+                variant="outlined"
+                disabled={!roomCodeInput.trim() || roomLoading}
+              >
+                Join
+              </Button>
+            </Box>
             <Button
               variant="outlined"
               color="error"
@@ -286,22 +423,24 @@ export default function AnnouncementPage() {
             >
               Leave Room
             </Button>
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<AddIcon />}
-              onClick={handleOpenAddForm}
-              sx={{
-                borderRadius: 2,
-                px: 3,
-                py: 1,
-                fontWeight: "bold",
-                textTransform: "none",
-                boxShadow: "0 4px 12px rgba(25, 118, 210, 0.3)",
-              }}
-            >
-              Add Announcement
-            </Button>
+            {canManageAnnouncements && (
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<AddIcon />}
+                onClick={handleOpenAddForm}
+                sx={{
+                  borderRadius: 2,
+                  px: 3,
+                  py: 1,
+                  fontWeight: "bold",
+                  textTransform: "none",
+                  boxShadow: "0 4px 12px rgba(25, 118, 210, 0.3)",
+                }}
+              >
+                Add Announcement
+              </Button>
+            )}
             <RoomLeaveDialog
               open={leaveDialogOpen}
               onClose={() => setLeaveDialogOpen(false)}
@@ -313,7 +452,7 @@ export default function AnnouncementPage() {
       </Box>
 
       {/* Join Room Form */}
-      {!joinedRoom && (
+      {!isRoomHub && !hasCurrentRoom && (
         <Paper
           elevation={0}
           sx={{
@@ -368,7 +507,7 @@ export default function AnnouncementPage() {
       )}
 
       {/* Search Bar */}
-      {joinedRoom && (
+      {hasCurrentRoom && !roomContextLoading && (
         <RoomLevelBar
           key={joinedRoom.room_id}
           roomId={joinedRoom.room_id}
@@ -376,7 +515,7 @@ export default function AnnouncementPage() {
         />
       )}
 
-      {joinedRoom && (
+      {hasCurrentRoom && !roomContextLoading && (
         <Paper
           elevation={0}
           sx={{
@@ -404,7 +543,9 @@ export default function AnnouncementPage() {
         </Paper>
       )}
 
-      {joinedRoom && (
+      {hasCurrentRoom &&
+        !roomContextLoading &&
+        (!isRoomHub || Number(joinedRoom.room_id) === roomIdFromRoute) && (
         <Box sx={{ mb: 3 }}>
           <RoomTabs
             key={joinedRoom.room_id}
@@ -416,14 +557,35 @@ export default function AnnouncementPage() {
       )}
 
       {/* Error state */}
-      {error && (
+      {isRoomHub &&
+      (roomContextLoading ||
+        resolvedRoomId !== routeRoomId ||
+        (!hasCurrentRoom && !error)) ? (
+        <Box sx={{ display: "grid", placeItems: "center", minHeight: 240 }}>
+          <CircularProgress />
+        </Box>
+      ) : isRoomHub && !hasCurrentRoom ? (
+        <Alert
+          severity="error"
+          sx={{ m: 2 }}
+          action={
+            <Button color="inherit" onClick={() => navigate("/officer/rooms/main")}>
+              All Rooms
+            </Button>
+          }
+        >
+          {error || "This room is unavailable to your account."}
+        </Alert>
+      ) : null}
+
+      {error && (!isRoomHub || hasCurrentRoom) && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error}
         </Alert>
       )}
 
       {/* Loading state */}
-      {joinedRoom &&
+      {hasCurrentRoom && !roomContextLoading &&
         (loading ? (
           <Box
             sx={{
@@ -458,7 +620,9 @@ export default function AnnouncementPage() {
             <Typography variant="body2" color="text.disabled" sx={{ mb: 3 }}>
               {searchTerm
                 ? "Try adjusting your search query."
-                : "Click the button below to create your first announcement."}
+                : canManageAnnouncements
+                  ? "Click the button below to create your first announcement."
+                  : "There are no announcements in this room yet."}
             </Typography>
           </Paper>
         ) : (
@@ -478,8 +642,8 @@ export default function AnnouncementPage() {
               >
                 <AnnouncementCard
                   announcement={announcement}
-                  onEdit={handleOpenEditForm}
-                  onDelete={handleOpenDeleteDialog}
+                  onEdit={canManageAnnouncements ? handleOpenEditForm : undefined}
+                  onDelete={canManageAnnouncements ? handleOpenDeleteDialog : undefined}
                 />
               </Box>
             ))}

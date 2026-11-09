@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import {
   Alert,
   Box,
   Button,
   CircularProgress,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -29,6 +30,12 @@ import {
   updateCalendarEvent,
 } from "../../api/officer/calendarAPI";
 
+const OFFICER_CALENDAR_API = {
+  createCalendarEvent,
+  deleteCalendarEvent,
+  fetchCalendarEvents,
+  updateCalendarEvent,
+};
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = Array.from({ length: 12 }, (_, index) =>
   new Date(2020, index, 1).toLocaleString("en-US", { month: "long" }),
@@ -54,6 +61,13 @@ const parseDateKey = (value) => {
 const eventDateKey = (event) => String(event.start_at).slice(0, 10);
 const eventTime = (event) => String(event.start_at).slice(11, 16);
 const endTime = (event) => (event.end_at ? String(event.end_at).slice(11, 16) : "");
+const canManageEvent = (event) =>
+  event.can_manage === undefined || Boolean(event.can_manage);
+const eventAudience = (event) => {
+  if (event.visibility_scope === "global") return "All rooms";
+  if (event.visibility_scope === "college") return `${event.college} college`;
+  return event.room_name || "This room";
+};
 const emptyForm = (date) => ({
   title: "",
   description: "",
@@ -81,7 +95,19 @@ function getCalendarDays(year, month) {
   });
 }
 
-export default function Calendar() {
+export default function Calendar({
+  roomId: scopedRoomId,
+  eventApi = OFFICER_CALENDAR_API,
+  title = "Event Scheduler",
+  description = "Plan events, assignments, reminders, and important dates.",
+  scopeDescription = "",
+}) {
+  const {
+    createCalendarEvent: createEvent,
+    deleteCalendarEvent: deleteEvent,
+    fetchCalendarEvents: fetchEvents,
+    updateCalendarEvent: updateEvent,
+  } = eventApi;
   const todayKey = toDateKey(new Date());
   const [viewDate, setViewDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(todayKey);
@@ -95,21 +121,21 @@ export default function Calendar() {
   const [editingEvent, setEditingEvent] = useState(null);
   const [form, setForm] = useState(emptyForm(todayKey));
 
-  const loadEvents = async () => {
+  const loadEvents = useCallback(async () => {
     try {
       setLoading(true);
       setErrorMessage("");
-      setEvents(await fetchCalendarEvents());
+      setEvents(await fetchEvents(scopedRoomId));
     } catch (error) {
       setErrorMessage(error.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchEvents, scopedRoomId]);
 
   useEffect(() => {
-    loadEvents();
-  }, []);
+    void loadEvents();
+  }, [loadEvents]);
 
   const calendarDays = useMemo(
     () => getCalendarDays(viewDate.getFullYear(), viewDate.getMonth()),
@@ -192,9 +218,9 @@ export default function Calendar() {
     };
     try {
       if (editingEvent) {
-        await updateCalendarEvent(editingEvent.event_id, payload);
+        await updateEvent(editingEvent.event_id, payload, scopedRoomId);
       } else {
-        await createCalendarEvent(payload);
+        await createEvent(payload, scopedRoomId);
       }
       setDialogOpen(false);
       setSelectedDate(form.date);
@@ -212,7 +238,7 @@ export default function Calendar() {
     if (!window.confirm(`Delete "${event.title}"?`)) return;
     try {
       setErrorMessage("");
-      await deleteCalendarEvent(event.event_id);
+      await deleteEvent(event.event_id, scopedRoomId);
       await loadEvents();
     } catch (error) {
       setErrorMessage(error.message);
@@ -225,7 +251,7 @@ export default function Calendar() {
   return (
     <Box sx={{ p: 3 }}>
       <Helmet titleTemplate="%s - GovBoard">
-        <title>Event Handlers Calendar</title>
+        <title>{title}</title>
       </Helmet>
 
       <Stack
@@ -237,11 +263,16 @@ export default function Calendar() {
       >
         <Box>
           <Typography variant="h4" sx={{ fontWeight: "bold", mb: 1 }}>
-            Event Handlers
+            {title}
           </Typography>
           <Typography color="text.secondary">
-            Plan events, assignments, reminders, and important dates.
+            {description}
           </Typography>
+          {scopeDescription && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              {scopeDescription}
+            </Typography>
+          )}
         </Box>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => openCreateDialog()}>
           Add event
@@ -436,6 +467,14 @@ export default function Calendar() {
                   >
                     <Box>
                       <Typography sx={{ fontWeight: 700 }}>{event.title}</Typography>
+                      {event.visibility_scope && (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={eventAudience(event)}
+                          sx={{ mt: 0.5 }}
+                        />
+                      )}
                       <Typography variant="body2" color="text.secondary">
                         {eventTime(event)}
                         {event.end_at ? ` - ${endTime(event)}` : ""}
@@ -452,12 +491,24 @@ export default function Calendar() {
                       )}
                     </Box>
                     <Stack direction="row" alignSelf={{ xs: "flex-start", sm: "center" }}>
-                      <IconButton aria-label="Edit event" onClick={() => openEditDialog(event)}>
-                        <EditOutlinedIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton aria-label="Delete event" onClick={() => handleDelete(event)}>
-                        <DeleteOutlineIcon fontSize="small" />
-                      </IconButton>
+                      {canManageEvent(event) && (
+                        <>
+                          <IconButton
+                            aria-label="Edit event"
+                            onClick={() => openEditDialog(event)}
+                            sx={{ minWidth: 44, minHeight: 44 }}
+                          >
+                            <EditOutlinedIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton
+                            aria-label="Delete event"
+                            onClick={() => handleDelete(event)}
+                            sx={{ minWidth: 44, minHeight: 44 }}
+                          >
+                            <DeleteOutlineIcon fontSize="small" />
+                          </IconButton>
+                        </>
+                      )}
                     </Stack>
                   </Stack>
                 </Paper>

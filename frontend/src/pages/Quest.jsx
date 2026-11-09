@@ -13,9 +13,12 @@ import {
 } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
 import { Helmet } from "react-helmet-async";
+import { useParams } from "react-router-dom";
 import { fetchMyRoom, fetchRoomQuests } from "../api/roomAPI";
 
 export default function Quest() {
+  const { roomId: routeRoomId } = useParams();
+  const roomId = Number(routeRoomId);
   const [room, setRoom] = useState(null);
   const [questData, setQuestData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -31,13 +34,15 @@ export default function Quest() {
       setError("");
 
       try {
-        const currentRoom = await fetchMyRoom();
+        const currentRoom = await fetchMyRoom(roomId);
         if (currentRequest !== requestId.current) return;
+        if (!currentRoom) {
+          setError("You are not a member of this room.");
+          return;
+        }
         setRoom(currentRoom);
 
-        if (!currentRoom) return;
-
-        const data = await fetchRoomQuests(currentRoom.room_id);
+        const data = await fetchRoomQuests(roomId);
         if (currentRequest === requestId.current) {
           setQuestData(data);
         }
@@ -56,13 +61,18 @@ export default function Quest() {
     loadQuests();
     window.addEventListener("room-membership-updated", loadQuests);
     window.addEventListener("storage", loadQuests);
+    const handleRoomXpUpdated = (event) => {
+      if (Number(event.detail?.roomId) === roomId) loadQuests();
+    };
+    window.addEventListener("room-xp-updated", handleRoomXpUpdated);
 
     return () => {
       requestId.current += 1;
       window.removeEventListener("room-membership-updated", loadQuests);
       window.removeEventListener("storage", loadQuests);
+      window.removeEventListener("room-xp-updated", handleRoomXpUpdated);
     };
-  }, []);
+  }, [roomId]);
 
   const level = questData?.room_level;
   const progress = level
@@ -82,7 +92,9 @@ export default function Quest() {
         Daily Quests
       </Typography>
       <Typography color="text.secondary">
-        Complete daily activities to earn experience for your room.
+        {room
+          ? `Complete activities in ${room.room_name} to earn experience for this room only.`
+          : "Complete daily activities in this room to earn experience for this room only."}
       </Typography>
 
       {loading && (
@@ -99,7 +111,7 @@ export default function Quest() {
 
       {!loading && !error && !room && (
         <Alert severity="info" sx={{ mt: 3 }}>
-          Join a room to view and complete its daily quests.
+          This room is unavailable or you are no longer a member.
         </Alert>
       )}
 

@@ -6,12 +6,13 @@ import { authenticateStudent } from "../../middleware/studentAuthMiddleware.js";
 import { logStudentAudit } from "../../utils/student/studentAuditLogger.js";
 import { auditLoginActivity } from "../../utils/shared/loginActivityLogger.js";
 import { awardLoginXp } from "../../utils/shared/roomLevelService.js";
+import { clearOrphanedOfficerStatus } from "../../utils/shared/roomOfficerAccess.js";
 
 const router = express.Router();
 
 const loadAccount = (req, res, callback) => {
   db.query(
-    `SELECT first_name, last_name, student_number
+    `SELECT first_name, last_name, student_number, college, course
      FROM student WHERE student_id = ? LIMIT 1`,
     [req.user.student_id],
     callback,
@@ -33,14 +34,21 @@ router.put("/account", authenticateStudent, (req, res) => {
   const firstName = req.body.first_name?.trim();
   const lastName = req.body.last_name?.trim();
   const studentNumber = req.body.student_number?.trim();
+  const course = typeof req.body.course === "string" ? req.body.course.trim() : "";
+  if (req.body.course != null && typeof req.body.course !== "string") {
+    return res.status(400).json({ message: "Course must be text." });
+  }
   if (!firstName || !lastName || !studentNumber) {
     return res.status(400).json({ message: "First name, last name, and student number are required." });
   }
+  if (course.length > 150) {
+    return res.status(400).json({ message: "Course must be 150 characters or fewer." });
+  }
 
   db.query(
-    `UPDATE student SET first_name = ?, last_name = ?, student_number = ?
+    `UPDATE student SET first_name = ?, last_name = ?, student_number = ?, course = ?
      WHERE student_id = ?`,
-    [firstName, lastName, studentNumber, req.user.student_id],
+    [firstName, lastName, studentNumber, course || null, req.user.student_id],
     (err) => {
       if (err) {
         if (err.code === "ER_DUP_ENTRY") {
@@ -51,7 +59,12 @@ router.put("/account", authenticateStudent, (req, res) => {
       }
       void logStudentAudit(req.user.student_id, { action: "Update",
         role: "Student", status: "SUCCESS", information: "Student updated account details" });
-      res.json({ first_name: firstName, last_name: lastName, student_number: studentNumber });
+      res.json({
+        first_name: firstName,
+        last_name: lastName,
+        student_number: studentNumber,
+        course: course || null,
+      });
     },
   );
 });
@@ -84,12 +97,14 @@ router.put("/account/password", authenticateStudent, (req, res) => {
 });
 
 // REGISTER
-// Table: student (student_id, first_name, last_name, student_number, batch_id, password, date_created)
+// Table: student (student_id, first_name, last_name, student_number, college, batch_id, password, date_created)
 router.post("/register", (req, res) => {
   const {
     first_name,
     last_name,
     student_number,
+    college,
+    course,
     position,
     year,
     section,
@@ -100,11 +115,18 @@ router.post("/register", (req, res) => {
     !first_name ||
     !last_name ||
     !student_number ||
+    !college?.trim() ||
     !year ||
     !section ||
     !password
   ) {
     return res.status(400).json({ message: "All fields are required" });
+  }
+  if (course != null && typeof course !== "string") {
+    return res.status(400).json({ message: "Course must be text." });
+  }
+  if (typeof course === "string" && course.trim().length > 150) {
+    return res.status(400).json({ message: "Course must be 150 characters or fewer." });
   }
 
   db.query(
@@ -138,8 +160,9 @@ router.post("/register", (req, res) => {
             batchRows && batchRows.length > 0 ? batchRows[0].batch_id : null;
           const insertStudent = (resolvedBatchId) => {
             const sql = `
-          INSERT INTO student (first_name, last_name, student_number, position, batch_id, password)
-          VALUES (?, ?, ?, ?, ?, ?)`;
+            INSERT INTO student
+              (first_name, last_name, student_number, college, course, position, batch_id, password)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
 
             db.query(
               sql,
@@ -147,6 +170,8 @@ router.post("/register", (req, res) => {
                 first_name.trim(),
                 last_name.trim(),
                 student_number.trim(),
+                college.trim(),
+                typeof course === "string" ? course.trim() || null : null,
                 position?.trim() || "Student",
                 resolvedBatchId,
                 hashedPassword,
@@ -205,14 +230,19 @@ router.post("/login", auditLoginActivity(), (req, res) => {
 
   const sql = `
     SELECT s.student_id, s.first_name, s.last_name, s.student_number, s.position,
+      s.college, s.course,
       b.year_name AS year, b.section_name AS section, s.password,
-      s.role, s.can_add, s.can_edit, s.can_delete, s.can_moderate
+      s.role, s.can_add, s.can_edit, s.can_delete, s.can_moderate,
+      EXISTS (
+        SELECT 1 FROM room_member rm
+         WHERE rm.member_id = s.student_id AND rm.member_type = 'officer'
+      ) AS has_officer_membership
     FROM student s
     LEFT JOIN batch b ON b.batch_id = s.batch_id
     WHERE s.student_number = ?
     LIMIT 1`;
 
-  db.query(sql, [student_number.trim()], (err, results) => {
+  db.query(sql, [student_number.trim()], async (err, results) => {
     if (err) {
       req.loginFailureReason = "Database error while checking login credentials";
       console.error("DB error:", err);
@@ -236,12 +266,27 @@ router.post("/login", auditLoginActivity(), (req, res) => {
         .json({ message: "Invalid student number or password" });
     }
 
+    if (!user.has_officer_membership) {
+      try {
+        await clearOrphanedOfficerStatus(db.promise(), [user.student_id]);
+        user.position = "Student";
+        user.role = null;
+        user.can_add = 0;
+        user.can_edit = 0;
+        user.can_delete = 0;
+        user.can_moderate = 0;
+      } catch (cleanupError) {
+        console.error("Stale officer status cleanup error:", cleanupError);
+        return res.status(500).json({ message: "Unable to refresh account status." });
+      }
+    }
+
     const token = jwt.sign(
       {
         id: user.student_id,
         student_id: user.student_id,
         student_number: user.student_number,
-        ...(user.role
+        ...(user.has_officer_membership
           ? {
               officer_id: user.student_id,
               role: user.role,
@@ -269,16 +314,18 @@ router.post("/login", auditLoginActivity(), (req, res) => {
         first_name: user.first_name,
         last_name: user.last_name,
         student_number: user.student_number,
+        college: user.college,
+        course: user.course,
         position: user.position || "Student",
         year: user.year,
         section: user.section,
-        officer_id: user.role ? user.student_id : undefined,
-        role: user.role || null,
+        officer_id: user.has_officer_membership ? user.student_id : undefined,
+        role: user.has_officer_membership ? "officer" : null,
         can_add: user.can_add || 0,
         can_edit: user.can_edit || 0,
         can_delete: user.can_delete || 0,
         can_moderate: user.can_moderate || 0,
-        is_officer: Boolean(user.role),
+        is_officer: Boolean(user.has_officer_membership),
       });
     })();
   });
@@ -298,6 +345,9 @@ router.get("/session", (req, res) => {
       if (tokenError) {
         return res.status(401).json({ message: "Session expired." });
       }
+      if (payload.admin_id) {
+        return res.status(403).json({ message: "A student session is required." });
+      }
 
       const studentId = payload.student_id || payload.officer_id || payload.id;
       if (!studentId) {
@@ -306,14 +356,19 @@ router.get("/session", (req, res) => {
 
       db.query(
         `SELECT s.student_id, s.first_name, s.last_name, s.student_number, s.position,
+          s.college, s.course,
           b.year_name AS year, b.section_name AS section,
-          s.role, s.can_add, s.can_edit, s.can_delete, s.can_moderate
+          s.role, s.can_add, s.can_edit, s.can_delete, s.can_moderate,
+          EXISTS (
+            SELECT 1 FROM room_member rm
+             WHERE rm.member_id = s.student_id AND rm.member_type = 'officer'
+          ) AS has_officer_membership
          FROM student s
          LEFT JOIN batch b ON b.batch_id = s.batch_id
          WHERE s.student_id = ?
          LIMIT 1`,
         [studentId],
-        (dbError, rows) => {
+        async (dbError, rows) => {
           if (dbError) {
             console.error("Session refresh database error:", dbError);
             return res.status(500).json({ message: "Database error" });
@@ -323,12 +378,27 @@ router.get("/session", (req, res) => {
           }
 
           const user = rows[0];
+          if (!user.has_officer_membership) {
+            try {
+              await clearOrphanedOfficerStatus(db.promise(), [user.student_id]);
+              user.position = "Student";
+              user.role = null;
+              user.can_add = 0;
+              user.can_edit = 0;
+              user.can_delete = 0;
+              user.can_moderate = 0;
+            } catch (cleanupError) {
+              console.error("Stale officer status cleanup error:", cleanupError);
+              return res.status(500).json({ message: "Unable to refresh account status." });
+            }
+          }
+
           const refreshedToken = jwt.sign(
             {
               id: user.student_id,
               student_id: user.student_id,
               student_number: user.student_number,
-              ...(user.role
+              ...(user.has_officer_membership
                 ? {
                     officer_id: user.student_id,
                     role: user.role,
@@ -349,16 +419,18 @@ router.get("/session", (req, res) => {
             first_name: user.first_name,
             last_name: user.last_name,
             student_number: user.student_number,
+            college: user.college,
+            course: user.course,
             position: user.position || "Student",
             year: user.year,
             section: user.section,
-            officer_id: user.role ? user.student_id : undefined,
-            role: user.role || null,
+            officer_id: user.has_officer_membership ? user.student_id : undefined,
+            role: user.has_officer_membership ? "officer" : null,
             can_add: user.can_add || 0,
             can_edit: user.can_edit || 0,
             can_delete: user.can_delete || 0,
             can_moderate: user.can_moderate || 0,
-            is_officer: Boolean(user.role),
+            is_officer: Boolean(user.has_officer_membership),
           });
         },
       );

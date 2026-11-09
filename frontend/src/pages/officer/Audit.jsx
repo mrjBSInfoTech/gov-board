@@ -26,9 +26,8 @@ import { fetchAuditLogs } from "../../api/officer/auditLogAPI";
 import { fetchMyRoom } from "../../api/roomAPI";
 import { useTheme } from "@mui/material/styles";
 
-export default function Audit() {
+export default function Audit({ roomId }) {
   const theme = useTheme();
-  const [room, setRoom] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -42,17 +41,11 @@ export default function Audit() {
 
     const loadRoom = async () => {
       try {
-        const currentRoom = await fetchMyRoom();
+        const currentRoom = await fetchMyRoom(roomId);
         if (!active) return;
 
-        setRoom(currentRoom || null);
-        if (currentRoom?.room_id) {
-          localStorage.setItem("joinedRoom", JSON.stringify(currentRoom));
-          await loadFunds(currentRoom.room_id);
-        } else {
-          setLoading(false);
-          setFunds([]);
-        }
+        if (!currentRoom) setError("You are not a member of this room.");
+        setLoading(false);
       } catch (roomError) {
         if (!active) return;
         setLoading(false);
@@ -64,7 +57,7 @@ export default function Audit() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [roomId]);
 
   useEffect(() => {
     let active = true;
@@ -77,7 +70,7 @@ export default function Audit() {
       setLoading(true);
       setError(null);
       try {
-        const logs = await fetchAuditLogs(search, date, period);
+        const logs = await fetchAuditLogs(search, date, period, roomId);
         if (active) {
           setAuditLogs(logs);
           setVisibleCount(50);
@@ -92,7 +85,7 @@ export default function Audit() {
       active = false;
       clearTimeout(timer);
     };
-  }, [search, date, period]);
+  }, [search, date, period, roomId]);
 
   const formatAndCapitalize = (data) => {
     if (!data) return "N/A";

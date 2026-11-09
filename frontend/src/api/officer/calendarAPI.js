@@ -46,9 +46,11 @@ export const updateCalendarEvent = async (eventId, event, roomId) => {
   }
 };
 
-export const deleteCalendarEvent = async (eventId) => {
+export const deleteCalendarEvent = async (eventId, roomId) => {
   try {
-    const response = await api.delete(`/${eventId}`);
+    const response = await api.delete(`/${eventId}`, {
+      params: roomId ? { roomId } : undefined,
+    });
     return response.data;
   } catch (error) {
     handleError(error);

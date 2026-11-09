@@ -1,6 +1,7 @@
+import { useEffect, useState } from "react";
 import { Helmet } from "react-helmet-async";
-import { Navigate, useLocation } from "react-router-dom";
-import { Box, Paper, Typography } from "@mui/material";
+import { Navigate, useParams } from "react-router-dom";
+import { Alert, Box, CircularProgress, Paper, Typography } from "@mui/material";
 import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
 import AttachMoneyOutlinedIcon from "@mui/icons-material/AttachMoneyOutlined";
 import EventNoteOutlinedIcon from "@mui/icons-material/EventNoteOutlined";
@@ -11,6 +12,8 @@ import Calendar from "./Calendar";
 import Fund from "./Fund";
 import Audit from "./Audit";
 import Budget from "./Budget";
+import Moderate from "./Moderate";
+import { fetchMyRoom } from "../../api/roomAPI";
 
 const SECTIONS = {
   audit: {
@@ -29,7 +32,7 @@ const SECTIONS = {
     icon: AttachMoneyOutlinedIcon,
   },
   "event-handlers": {
-    title: "Event Handlers",
+    title: "Event Scheduler",
     description: "Coordinate event assignments and responsibilities.",
     icon: EventNoteOutlinedIcon,
   },
@@ -41,26 +44,66 @@ const SECTIONS = {
 };
 
 export default function GovernanceSection() {
-  const { pathname } = useLocation();
-  const sectionKey = pathname.split("/").filter(Boolean).pop();
+  const { roomId, section: sectionKey } = useParams();
   const section = SECTIONS[sectionKey] || SECTIONS.audit;
-  const position = localStorage.getItem("officer_position");
+  const [membership, setMembership] = useState(null);
+  const [verifiedRoomId, setVerifiedRoomId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  if (!canAccessGovernanceSection(position, sectionKey)) {
-    return <Navigate to="/officer/dashboard" replace />;
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setMembership(null);
+    setError("");
+    fetchMyRoom(Number(roomId))
+      .then((room) => {
+        if (active) {
+          setMembership(room);
+          setVerifiedRoomId(roomId);
+        }
+      })
+      .catch((loadError) => {
+        if (active) {
+          setVerifiedRoomId(roomId);
+          setError(loadError.message || "Unable to verify room access.");
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [roomId]);
+
+  if (loading || verifiedRoomId !== roomId) {
+    return <Box sx={{ minHeight: 240, display: "grid", placeItems: "center" }}><CircularProgress /></Box>;
+  }
+  if (error) {
+    return <Alert severity="error" sx={{ m: 3 }}>{error}</Alert>;
+  }
+  if (!membership || membership.member_type !== "officer") {
+    return <Navigate to="/officer/rooms/main" replace />;
+  }
+  if (!SECTIONS[sectionKey] || !canAccessGovernanceSection(membership.position, sectionKey)) {
+    return <Navigate to={`/officer/rooms/${roomId}/hub`} replace />;
   }
 
   if (sectionKey === "event-handlers") {
-    return <Calendar />;
+    return <Calendar key={roomId} roomId={Number(roomId)} />;
   }
   if (sectionKey === "budget") {
-    return <Budget />;
+    return <Budget key={roomId} roomId={Number(roomId)} />;
   }
   if (sectionKey === "audit") {
-    return <Audit />;
+    return <Audit key={roomId} roomId={Number(roomId)} />;
   }
   if (sectionKey === "funds") {
-    return <Fund />;
+    return <Fund key={roomId} roomId={Number(roomId)} />;
+  }
+  if (sectionKey === "moderate") {
+    return <Moderate key={roomId} roomId={Number(roomId)} position={membership.position} />;
   }
 
   const SectionIcon = section.icon;

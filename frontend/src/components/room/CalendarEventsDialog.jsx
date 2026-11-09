@@ -15,6 +15,7 @@ import {
   Typography,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
+import { fetchAdminRoomCalendarEvents } from "../../api/admin/calendarAPI";
 import { fetchCalendarEvents } from "../../api/officer/calendarAPI";
 import { fetchStudentCalendarEvents } from "../../api/student/calendarAPI";
 
@@ -36,9 +37,11 @@ export default function CalendarEventsDialog({ open, onClose, roomId }) {
     let active = true;
     setLoading(true);
     setErrorMessage("");
-    const loadEvents = localStorage.getItem("student_token")
-      ? fetchStudentCalendarEvents(roomId)
-      : fetchCalendarEvents(roomId);
+    const loadEvents = localStorage.getItem("admin_token")
+      ? fetchAdminRoomCalendarEvents(roomId)
+      : localStorage.getItem("student_token")
+        ? fetchStudentCalendarEvents(roomId)
+        : fetchCalendarEvents(roomId);
 
     loadEvents
       .then((calendarEvents) => {

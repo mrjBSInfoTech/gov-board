@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppProvider } from "@toolpad/core";
 import { DashboardLayout as MuiDashboardLayout } from "@toolpad/core";
 import {
@@ -22,8 +22,9 @@ import {
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import DashboardIcon from "@mui/icons-material/Dashboard";
-import CampaignIcon from "@mui/icons-material/Campaign";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
+import FolderSpecialIcon from "@mui/icons-material/FolderSpecial";
+import HomeWorkIcon from "@mui/icons-material/HomeWork";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 import { adminDarkTheme } from "../theme/customTheme";
@@ -31,6 +32,7 @@ import Nexus from "../assets/react.svg";
 import { logoutUser } from "../api/student/studentAuthenticationAPI";
 import { clearAuthData } from "../../utils/auth";
 import { recordStudentLogout } from "../api/student/auditLogAPI";
+import { fetchMyRooms } from "../api/roomAPI";
 
 const Transition = React.forwardRef(function Transition(props, ref) {
   return <Slide direction="up" ref={ref} {...props} />;
@@ -39,8 +41,9 @@ const Transition = React.forwardRef(function Transition(props, ref) {
 export default function StudentLayout() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [roomName, setRoomName] = useState("");
+  const [rooms, setRooms] = useState([]);
   const [open, setOpen] = useState(false);
+  const roomsRequestId = useRef(0);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -55,28 +58,28 @@ export default function StudentLayout() {
     return () => window.removeEventListener("storage", loadStudentProfile);
   }, []);
 
-  useEffect(() => {
-    const loadRoomName = () => {
-      const studentId = localStorage.getItem("student_student_id");
-      const savedRoom = studentId
-        ? localStorage.getItem(`studentJoinedRoom:${studentId}`)
-        : null;
-      try {
-        setRoomName(savedRoom ? JSON.parse(savedRoom).room_name || "" : "");
-      } catch (error) {
-        console.error("Unable to read saved student room:", error);
-        setRoomName("");
+  const loadRooms = useCallback(async () => {
+    const requestId = ++roomsRequestId.current;
+    try {
+      const currentRooms = await fetchMyRooms();
+      if (requestId === roomsRequestId.current) setRooms(currentRooms);
+    } catch (error) {
+      if (requestId === roomsRequestId.current) {
+        console.error("Unable to load student room navigation:", error);
+        setRooms([]);
       }
-    };
-
-    loadRoomName();
-    window.addEventListener("room-membership-updated", loadRoomName);
-    window.addEventListener("storage", loadRoomName);
-    return () => {
-      window.removeEventListener("room-membership-updated", loadRoomName);
-      window.removeEventListener("storage", loadRoomName);
-    };
+    }
   }, []);
+
+  useEffect(() => {
+    void loadRooms();
+    window.addEventListener("room-membership-updated", loadRooms);
+    window.addEventListener("storage", loadRooms);
+    return () => {
+      window.removeEventListener("room-membership-updated", loadRooms);
+      window.removeEventListener("storage", loadRooms);
+    };
+  }, [loadRooms]);
 
   const handleLogout = async () => {
     try {
@@ -100,11 +103,30 @@ export default function StudentLayout() {
   const navigation = [
     { segment: "home", title: "Dashboard", icon: <DashboardIcon /> },
     { segment: "account", title: "Account", icon: <AccountCircleIcon /> },
-    { segment: "quest", title: "Quest", icon: <EmojiEventsIcon /> },
     {
-      segment: "announcement",
-      title: roomName || "Room",
+      segment: "rooms",
+      title: "Rooms",
       icon: <MeetingRoomIcon />,
+      children: [
+        { segment: "main", title: "Main", icon: <DashboardIcon /> },
+        ...rooms.map((room) => ({
+          segment: String(room.room_id),
+          title: room.room_name,
+          icon: <FolderSpecialIcon />,
+          children: [
+            {
+              segment: "hub",
+              title: "Hub",
+              icon: <HomeWorkIcon />,
+            },
+            {
+              segment: "quests",
+              title: "Quests",
+              icon: <EmojiEventsIcon />,
+            },
+          ],
+        })),
+      ],
     },
   ];
 

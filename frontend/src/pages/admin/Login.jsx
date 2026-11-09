@@ -101,6 +101,12 @@ const Login = () => {
       localStorage.setItem("admin_username", data.username || "");
       localStorage.setItem("admin_first_name", data.first_name || "");
       localStorage.setItem("admin_last_name", data.last_name || "");
+      localStorage.setItem("admin_position", data.position || "");
+      localStorage.setItem("admin_college", data.college || "");
+      localStorage.setItem(
+        "admin_can_edit_students",
+        String(Boolean(data.can_edit_students)),
+      );
 
       showSnackbar("Login successful!", "success");
       navigate("/admin/dashboard", { replace: true });

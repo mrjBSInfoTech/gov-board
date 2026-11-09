@@ -1,4 +1,5 @@
 import { logAudit } from "../shared/auditLogger.js";
+import { getAuditRoomId } from "../shared/roomAuditScope.js";
 import db from "../../database/db.js";
 
 export async function logOfficerAudit(officerId, event) {
@@ -27,6 +28,7 @@ export function auditOfficerActivity(req, res, next) {
     void logOfficerAudit(req.user.officer_id, {
       action: actions[req.method] || "View",
       status: res.statusCode >= 400 ? "Failed" : "Success",
+      room_id: getAuditRoomId(req),
       information:
         req.auditInformation || `${req.method} ${path} (HTTP ${res.statusCode})`,
     });

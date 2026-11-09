@@ -14,8 +14,15 @@ const router = express.Router();
 
 router.get("/account", authenticateOfficer, (req, res) => {
   db.query(
-    "SELECT first_name, last_name, student_number FROM student WHERE student_id = ? AND role IS NOT NULL LIMIT 1",
-    [req.user.officer_id],
+    `SELECT first_name, last_name, student_number, college, course
+       FROM student
+      WHERE student_id = ?
+        AND (role IS NOT NULL OR EXISTS (
+          SELECT 1 FROM room_member
+           WHERE member_id = ? AND member_type = 'officer'
+        ))
+      LIMIT 1`,
+    [req.user.officer_id, req.user.officer_id],
     (err, rows) => {
       if (err) {
         console.error("Officer account read error:", err);
@@ -31,20 +38,43 @@ router.put("/account", authenticateOfficer, (req, res) => {
   const firstName = req.body.first_name?.trim();
   const lastName = req.body.last_name?.trim();
   const studentNumber = req.body.student_number?.trim();
+  const course = typeof req.body.course === "string" ? req.body.course.trim() : "";
+  if (req.body.course != null && typeof req.body.course !== "string") {
+    return res.status(400).json({ message: "Course must be text." });
+  }
   if (!firstName || !lastName || !studentNumber) {
     return res.status(400).json({ message: "First name, last name, and student number are required." });
   }
+  if (course.length > 150) {
+    return res.status(400).json({ message: "Course must be 150 characters or fewer." });
+  }
   db.query(
-    `UPDATE student SET first_name = ?, last_name = ?, student_number = ?
-     WHERE student_id = ? AND role IS NOT NULL`,
-    [firstName, lastName, studentNumber, req.user.officer_id],
+    `UPDATE student SET first_name = ?, last_name = ?, student_number = ?, course = ?
+     WHERE student_id = ?
+       AND (role IS NOT NULL OR EXISTS (
+         SELECT 1 FROM room_member
+          WHERE member_id = ? AND member_type = 'officer'
+       ))`,
+    [
+      firstName,
+      lastName,
+      studentNumber,
+      course || null,
+      req.user.officer_id,
+      req.user.officer_id,
+    ],
     (err) => {
       if (err) {
         if (err.code === "ER_DUP_ENTRY") return res.status(409).json({ message: "Student number already exists." });
         console.error("Officer account update error:", err);
         return res.status(500).json({ message: "Unable to update account." });
       }
-      res.json({ first_name: firstName, last_name: lastName, student_number: studentNumber });
+      res.json({
+        first_name: firstName,
+        last_name: lastName,
+        student_number: studentNumber,
+        course: course || null,
+      });
     },
   );
 });
@@ -54,7 +84,16 @@ router.put("/account/password", authenticateOfficer, (req, res) => {
   if (!currentPassword || !newPassword || newPassword.length < 8) {
     return res.status(400).json({ message: "Current password and a new password of at least 8 characters are required." });
   }
-  db.query("SELECT password FROM student WHERE student_id = ? AND role IS NOT NULL LIMIT 1", [req.user.officer_id], (err, rows) => {
+  db.query(
+    `SELECT password FROM student
+      WHERE student_id = ?
+        AND (role IS NOT NULL OR EXISTS (
+          SELECT 1 FROM room_member
+           WHERE member_id = ? AND member_type = 'officer'
+        ))
+      LIMIT 1`,
+    [req.user.officer_id, req.user.officer_id],
+    (err, rows) => {
     if (err) {
       console.error("Officer password lookup error:", err);
       return res.status(500).json({ message: "Unable to change password." });
@@ -62,14 +101,27 @@ router.put("/account/password", authenticateOfficer, (req, res) => {
     if (!rows.length || !bcrypt.compareSync(currentPassword, rows[0].password)) {
       return res.status(400).json({ message: "Current password is incorrect." });
     }
-    db.query("UPDATE student SET password = ? WHERE student_id = ?", [bcrypt.hashSync(newPassword, 10), req.user.officer_id], (updateErr) => {
+    db.query(
+      `UPDATE student SET password = ? WHERE student_id = ?
+        AND (role IS NOT NULL OR EXISTS (
+          SELECT 1 FROM room_member
+           WHERE member_id = ? AND member_type = 'officer'
+        ))`,
+      [
+        bcrypt.hashSync(newPassword, 10),
+        req.user.officer_id,
+        req.user.officer_id,
+      ],
+      (updateErr) => {
       if (updateErr) {
         console.error("Officer password update error:", updateErr);
         return res.status(500).json({ message: "Unable to change password." });
       }
       res.json({ message: "Password changed successfully." });
-    });
-  });
+      },
+    );
+  },
+  );
 });
 
 // LOGIN
@@ -86,12 +138,20 @@ router.post("/login", auditLoginActivity(true), async (req, res) => {
   const sql = `
     SELECT s.student_id AS officer_id, s.student_number, s.position,
       b.year_name AS year,
-      b.section_name AS section,
+      b.section_name AS section, s.course,
       s.first_name, s.last_name, s.password,
-      s.role, s.can_add, s.can_edit, s.can_delete, s.can_moderate
+      s.role, s.can_add, s.can_edit, s.can_delete, s.can_moderate,
+      EXISTS (
+        SELECT 1 FROM room_member rm
+         WHERE rm.member_id = s.student_id AND rm.member_type = 'officer'
+      ) AS has_officer_membership
     FROM student s
     LEFT JOIN batch b ON b.batch_id = s.batch_id
-    WHERE s.student_number = ? AND s.role IS NOT NULL
+    WHERE s.student_number = ?
+      AND EXISTS (
+        SELECT 1 FROM room_member rm
+         WHERE rm.member_id = s.student_id AND rm.member_type = 'officer'
+      )
     LIMIT 1`;
 
   db.query(sql, [student_number.trim()], (err, results) => {
@@ -154,6 +214,7 @@ router.post("/login", auditLoginActivity(true), async (req, res) => {
         section: resolvedSection,
         first_name: officer.first_name,
         last_name: officer.last_name,
+        course: officer.course,
         role: officer.role,
         can_add: officer.can_add,
         can_edit: officer.can_edit,

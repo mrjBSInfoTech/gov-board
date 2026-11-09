@@ -12,6 +12,7 @@ import adminAccountRoutes from "./routes/admin/adminAccount.js";
 import adminAuditRoutes from "./routes/admin/adminAudit.js";
 import adminRoomRoutes from "./routes/admin/adminRoom.js";
 import adminStudentRoutes from "./routes/admin/adminStudent.js";
+import adminCalendarRoutes from "./routes/admin/adminCalendar.js";
 // Routes (Officer)
 import officerAuthenticateRoutes from "./routes/officer/officerAuthentication.js";
 import officerDashboardRoutes from "./routes/officer/officerDashboard.js";
@@ -44,6 +45,10 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use("/uploads/room-chat", (_req, res) => {
+  res.status(404).json({ message: "Room media not found." });
+});
+
 // Serve static files with absolute path
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
@@ -57,6 +62,7 @@ app.use("/api/admin/authenticate", adminAuthenticateRoutes);
 app.use("/api/admin/accounts", adminAccountRoutes);
 app.use("/api/admin/rooms", adminRoomRoutes);
 app.use("/api/admin/students", adminStudentRoutes);
+app.use("/api/admin/calendar", adminCalendarRoutes);
 app.use("/api/admin/audit", adminAuditRoutes);
 // Routes (Officer)
 app.use("/api/officer", auditOfficerActivity);

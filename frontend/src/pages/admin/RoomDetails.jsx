@@ -49,7 +49,7 @@ export default function RoomDetails() {
 
       <Button
         startIcon={<ArrowBackIcon />}
-        onClick={() => navigate("/admin/room")}
+        onClick={() => navigate("/admin/rooms/main")}
         sx={{ mb: 2 }}
       >
         Back to rooms
@@ -66,6 +66,12 @@ export default function RoomDetails() {
           <Paper variant="outlined" sx={{ p: 3, borderRadius: 2, mb: 4 }}>
             <Typography variant="h4" fontWeight="bold" gutterBottom>
               {room.room_name}
+            </Typography>
+            <Typography color="text.secondary" sx={{ mb: 1 }}>
+              {room.description}
+            </Typography>
+            <Typography color="text.secondary">
+              College: {room.college || "Unassigned"}
             </Typography>
             <Typography color="text.secondary">
               Room code: <strong>{room.room_number}</strong>

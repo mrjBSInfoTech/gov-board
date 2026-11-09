@@ -24,71 +24,94 @@ const canManage = (managerPosition, targetPosition) => {
   return managerRank >= 0 && targetRank > managerRank;
 };
 
-const findManager = (connection, officerId) =>
+const findManager = (connection, officerId, roomId) =>
   connection.query(
-    "SELECT student_id, position FROM student WHERE student_id = ? AND role IS NOT NULL LIMIT 1",
-    [officerId],
+    `SELECT member_id AS student_id, position
+       FROM room_member
+      WHERE member_id = ? AND room_id = ? AND member_type = 'officer'
+      LIMIT 1`,
+    [officerId, roomId],
   );
 
 router.post("/:id/promote", authenticateOfficer, async (req, res) => {
   const studentId = Number(req.params.id);
   const { position, roomId, confirmReplace = false } = req.body;
-  if (!studentId || !position || !roomId || !POSITIONS.includes(position)) {
+  const parsedRoomId = Number(roomId);
+  if (
+    !Number.isSafeInteger(studentId) ||
+    studentId < 1 ||
+    !Number.isSafeInteger(parsedRoomId) ||
+    parsedRoomId < 1 ||
+    !position ||
+    !POSITIONS.includes(position)
+  ) {
     return res.status(400).json({ message: "Student, room, and valid position are required." });
   }
 
   const connection = db.promise();
   try {
-    const [[manager]] = await findManager(connection, req.user.officer_id);
+    await connection.beginTransaction();
+    const [[manager]] = await findManager(connection, req.user.officer_id, parsedRoomId);
     if (!manager || !canManage(manager.position, position)) {
+      await connection.rollback();
       return res.status(403).json({ message: "You can only promote members to positions below your own." });
     }
 
     const [[target]] = await connection.query(
-      `SELECT s.student_id, s.first_name, s.last_name, s.position
+      `SELECT s.student_id, s.first_name, s.last_name, rm.position
        FROM student s INNER JOIN room_member rm ON rm.member_id = s.student_id
-       WHERE s.student_id = ? AND rm.room_id = ? LIMIT 1`,
-      [studentId, roomId],
+       WHERE s.student_id = ? AND rm.room_id = ? AND rm.member_type = 'student'
+       LIMIT 1 FOR UPDATE`,
+      [studentId, parsedRoomId],
     );
-    if (!target) return res.status(404).json({ message: "Student is not in this room." });
-    if (target.position !== "Student" && rankOf(target.position) < POSITIONS.length) {
+    if (!target) {
+      await connection.rollback();
+      return res.status(404).json({ message: "Student is not a student member of this room." });
+    }
+    if (target.position !== "Student") {
+      await connection.rollback();
       return res.status(400).json({ message: "This account is already an officer." });
     }
 
     const [duplicates] = await connection.query(
-      `SELECT student_id, first_name, last_name, position FROM student
-       WHERE batch_id = (SELECT batch_id FROM student WHERE student_id = ?)
-         AND position = ? AND role IS NOT NULL LIMIT 1`,
-      [studentId, position],
+      `SELECT s.student_id, s.first_name, s.last_name, rm.position
+         FROM room_member rm
+         INNER JOIN student s ON s.student_id = rm.member_id
+        WHERE rm.room_id = ? AND rm.member_type = 'officer'
+          AND rm.position = ? AND rm.member_id <> ?
+        LIMIT 1 FOR UPDATE`,
+      [parsedRoomId, position, studentId],
     );
     if (duplicates.length && !confirmReplace) {
+      await connection.rollback();
       return res.status(409).json({
         message: `There is already a ${position}. Confirm to replace that officer.`,
         requiresConfirmation: true,
       });
     }
 
-    await connection.beginTransaction();
     if (duplicates.length) {
       await connection.query(
-        `UPDATE student SET position = 'Student', role = NULL,
-          can_add = 0, can_edit = 0, can_delete = 0, can_moderate = 0
-         WHERE student_id = ?`,
-        [duplicates[0].student_id],
-      );
-      await connection.query(
-        "UPDATE room_member SET member_type = 'student' WHERE member_id = ?",
-        [duplicates[0].student_id],
+        `UPDATE room_member
+            SET member_type = 'student', position = 'Student'
+          WHERE room_id = ? AND member_id = ? AND member_type = 'officer'`,
+        [parsedRoomId, duplicates[0].student_id],
       );
     }
     await connection.query(
-      `UPDATE student SET position = ?, role = 'officer',
-        can_add = 1, can_edit = 1, can_delete = 1, can_moderate = 0
-       WHERE student_id = ?`,
-      [position, studentId],
+      `UPDATE room_member
+          SET member_type = 'officer', position = ?
+        WHERE room_id = ? AND member_id = ? AND member_type = 'student'`,
+      [position, parsedRoomId, studentId],
     );
     await connection.query(
-      "UPDATE room_member SET member_type = 'officer' WHERE member_id = ?",
+      `UPDATE student
+          SET can_add = IF(role IS NULL, 1, can_add),
+              can_edit = IF(role IS NULL, 1, can_edit),
+              can_delete = IF(role IS NULL, 1, can_delete),
+              can_moderate = IF(role IS NULL, 0, can_moderate),
+              role = COALESCE(role, 'officer')
+        WHERE student_id = ?`,
       [studentId],
     );
     await connection.commit();
@@ -105,31 +128,37 @@ router.post("/:id/promote", authenticateOfficer, async (req, res) => {
 router.post("/:id/demote", authenticateOfficer, async (req, res) => {
   const studentId = Number(req.params.id);
   const { roomId } = req.body;
-  if (!studentId || !roomId) return res.status(400).json({ message: "Student and room are required." });
+  const parsedRoomId = Number(roomId);
+  if (
+    !Number.isSafeInteger(studentId) ||
+    studentId < 1 ||
+    !Number.isSafeInteger(parsedRoomId) ||
+    parsedRoomId < 1
+  ) {
+    return res.status(400).json({ message: "Student and room are required." });
+  }
 
   const connection = db.promise();
   try {
-    const [[manager]] = await findManager(connection, req.user.officer_id);
+    await connection.beginTransaction();
+    const [[manager]] = await findManager(connection, req.user.officer_id, parsedRoomId);
     const [[target]] = await connection.query(
-      `SELECT s.student_id, s.first_name, s.last_name, s.position
+      `SELECT s.student_id, s.first_name, s.last_name, rm.position
        FROM student s INNER JOIN room_member rm ON rm.member_id = s.student_id
-       WHERE s.student_id = ? AND rm.room_id = ? AND s.role IS NOT NULL LIMIT 1`,
-      [studentId, roomId],
+       WHERE s.student_id = ? AND rm.room_id = ? AND rm.member_type = 'officer'
+       LIMIT 1 FOR UPDATE`,
+      [studentId, parsedRoomId],
     );
     if (!manager || !target || !canManage(manager.position, target.position)) {
+      await connection.rollback();
       return res.status(403).json({ message: "You can only demote officers below your own position." });
     }
 
-    await connection.beginTransaction();
     await connection.query(
-      `UPDATE student SET position = 'Student', role = NULL,
-        can_add = 0, can_edit = 0, can_delete = 0, can_moderate = 0
-       WHERE student_id = ?`,
-      [studentId],
-    );
-    await connection.query(
-      "UPDATE room_member SET member_type = 'student' WHERE member_id = ?",
-      [studentId],
+      `UPDATE room_member
+          SET member_type = 'student', position = 'Student'
+        WHERE room_id = ? AND member_id = ? AND member_type = 'officer'`,
+      [parsedRoomId, studentId],
     );
     await connection.commit();
     res.json({ message: `${target.first_name} ${target.last_name} was demoted to student.` });

@@ -1,7 +1,14 @@
 const COMMON_AUTH_KEYS = ["auth_section"];
 
 // For admin part
-const ADMIN_AUTH_KEYS = ["admin_token", "admin_first_name", "admin_last_name"];
+const ADMIN_AUTH_KEYS = [
+  "admin_token",
+  "admin_first_name",
+  "admin_last_name",
+  "admin_position",
+  "admin_college",
+  "admin_can_edit_students",
+];
 
 // For student part
 const STUDENT_AUTH_KEYS = [

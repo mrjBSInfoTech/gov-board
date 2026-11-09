@@ -13,7 +13,6 @@ import {
   Tooltip,
   Box,
   Typography,
-  Chip,
 } from "@mui/material";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import RefreshIcon from "@mui/icons-material/Refresh";
@@ -47,10 +46,12 @@ const generateCode = () => {
   return `${part1}-${part2}`;
 };
 
-const emptyForm = { room_number: "", room_name: "" };
-
 function RoomForm({ open, handleClose, selectedRoom, onSubmit }) {
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState({
+    room_number: "",
+    room_name: "",
+    description: "",
+  });
   const [errors, setErrors] = useState({});
   const [copied, setCopied] = useState(false);
 
@@ -66,9 +67,14 @@ function RoomForm({ open, handleClose, selectedRoom, onSubmit }) {
         setForm({
           room_number: selectedRoom.room_number || generateCode(),
           room_name: selectedRoom.room_name || "",
+          description: selectedRoom.description || "",
         });
       } else {
-        setForm({ room_number: generateCode(), room_name: "" });
+        setForm({
+          room_number: generateCode(),
+          room_name: "",
+          description: "",
+        });
       }
       setErrors({});
       setCopied(false);
@@ -90,6 +96,9 @@ function RoomForm({ open, handleClose, selectedRoom, onSubmit }) {
   const validate = () => {
     const newErrors = {};
     if (!form.room_name.trim()) newErrors.room_name = "Room name is required";
+    if (!form.description.trim()) {
+      newErrors.description = "Room description is required";
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -97,7 +106,7 @@ function RoomForm({ open, handleClose, selectedRoom, onSubmit }) {
   const handleKeyDown = (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
-      handleVerify();
+      handleSubmit();
     }
 
     if (event.key === "Escape") {
@@ -111,6 +120,7 @@ function RoomForm({ open, handleClose, selectedRoom, onSubmit }) {
     onSubmit({
       room_number: form.room_number,
       room_name: form.room_name.trim(),
+      description: form.description.trim(),
     });
   };
 
@@ -194,6 +204,19 @@ function RoomForm({ open, handleClose, selectedRoom, onSubmit }) {
                 </InputAdornment>
               ),
             }}
+          />
+          <TextField
+            label="Description"
+            name="description"
+            value={form.description}
+            onChange={handleChange}
+            error={Boolean(errors.description)}
+            helperText={errors.description || "What this room is for"}
+            fullWidth
+            size="small"
+            multiline
+            minRows={3}
+            inputProps={{ maxLength: 2000 }}
           />
         </Stack>
       </DialogContent>

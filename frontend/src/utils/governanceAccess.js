@@ -1,5 +1,5 @@
 export const GOVERNANCE_SECTIONS = [
-  { key: "event-handlers", title: "Event Handlers" },
+  { key: "event-handlers", title: "Event Scheduler" },
   { key: "moderate", title: "Moderate" },
   { key: "budget", title: "Budget" },
   { key: "funds", title: "Funds" },

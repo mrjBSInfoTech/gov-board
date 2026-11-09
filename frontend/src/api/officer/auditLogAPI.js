@@ -8,10 +8,18 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-export const fetchAuditLogs = async (search = "", date = null, period = "all") => {
+export const fetchAuditLogs = async (
+  search = "",
+  date = null,
+  period = "all",
+  roomId,
+) => {
   try {
     const response = await api.get("/", { params: {
-      search, date: date ? (date.format ? date.format("YYYY-MM-DD") : date) : "", period,
+      search,
+      date: date ? (date.format ? date.format("YYYY-MM-DD") : date) : "",
+      period,
+      roomId,
     } });
     return response.data || [];
   } catch (error) {

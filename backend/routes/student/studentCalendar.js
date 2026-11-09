@@ -1,6 +1,7 @@
 import express from "express";
 import db from "../../database/db.js";
 import { authenticateStudent } from "../../middleware/studentAuthMiddleware.js";
+import { getRoomCalendarEventPredicate } from "../../utils/shared/calendarEventScope.js";
 
 const router = express.Router();
 
@@ -13,11 +14,13 @@ router.get("/", authenticateStudent, (req, res) => {
   }
 
   db.query(
-    `SELECT event_id, room_id, title, description, start_at, end_at, reminder_minutes,
-            created_by, date_created, date_updated
-       FROM calendar_event
-      WHERE room_id = ?
-        AND start_at >= CURRENT_DATE
+    `SELECT e.event_id, e.room_id, e.visibility_scope, e.college, e.title,
+            e.description, e.start_at, e.end_at, e.reminder_minutes,
+            e.created_by, e.date_created, e.date_updated
+       FROM room r
+       JOIN calendar_event e ON ${getRoomCalendarEventPredicate()}
+      WHERE r.room_id = ?
+        AND e.start_at >= CURRENT_DATE
         AND EXISTS (
           SELECT 1
             FROM room_member
@@ -25,7 +28,7 @@ router.get("/", authenticateStudent, (req, res) => {
              AND member_type = 'student'
              AND member_id = ?
         )
-      ORDER BY start_at ASC, event_id ASC`,
+      ORDER BY e.start_at ASC, e.event_id ASC`,
     [roomId, roomId, studentId],
     (err, results) => {
       if (err) {

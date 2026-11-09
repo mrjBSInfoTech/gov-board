@@ -57,13 +57,13 @@ export default function Dashboard() {
 
   const dashboardCards = [
     {
-      title: "Officials",
+      title: "Officers",
       value: summary.officials,
       subtitle: "Active officers in the system",
       icon: <PeopleAltOutlinedIcon sx={{ fontSize: 38 }} />,
       color: "#1976d2",
-      action: () => navigate("/admin/account/officials"),
-      buttonLabel: "Manage officials",
+      action: () => navigate("/admin/account/students"),
+      buttonLabel: "Manage students and officers",
     },
     {
       title: "Rooms",
@@ -86,7 +86,7 @@ export default function Dashboard() {
   ];
 
   const quickLinks = [
-    { label: "Officials", path: "/admin/account/officials" },
+    { label: "Admins", path: "/admin/account/admins" },
     { label: "Students", path: "/admin/account/students" },
     { label: "Rooms", path: "/admin/room" },
     { label: "Audit Log", path: "/admin/audit" },

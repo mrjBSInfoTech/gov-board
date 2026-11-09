@@ -22,15 +22,20 @@ import Nexus from "../assets/react.svg";
 import { clearAuthData } from "../../utils/auth";
 import { recordAdminLogout } from "../api/admin/auditLogAPI";
 import { API_BASE_URL } from "../api/apiBaseURL";
+import { fetchRooms } from "../api/admin/roomAPI";
 
 // Icons
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
-import GroupsIcon from "@mui/icons-material/Groups";
 import SchoolIcon from "@mui/icons-material/School";
+import FolderSpecialIcon from "@mui/icons-material/FolderSpecial";
+import HomeWorkIcon from "@mui/icons-material/HomeWork";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import HistoryIcon from "@mui/icons-material/History";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
+import CampaignIcon from "@mui/icons-material/Campaign";
+import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
+import EventNoteIcon from "@mui/icons-material/EventNote";
 
 // Animation transition
 const Transition = React.forwardRef(function Transition(props, ref) {
@@ -49,7 +54,7 @@ const Transition = React.forwardRef(function Transition(props, ref) {
 });
 
 function CollapsibleNavigationItem({ item }) {
-  const storageKey = `admin-sidebar-expanded:${item.segment}`;
+  const storageKey = `admin-sidebar-expanded:${item.navigationKey || item.segment}`;
   const [expanded, setExpanded] = useState(() => localStorage.getItem(storageKey) === "true");
 
   const toggleExpanded = () => {
@@ -77,6 +82,9 @@ export default function AdminLayout() {
   // Info
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [adminPosition, setAdminPosition] = useState("");
+  const [adminCollege, setAdminCollege] = useState("");
+  const [rooms, setRooms] = useState([]);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -91,6 +99,8 @@ export default function AdminLayout() {
 
       setFirstName(storedFirstName || "");
       setLastName(storedLastName || "");
+      setAdminPosition(localStorage.getItem("admin_position") || "");
+      setAdminCollege(localStorage.getItem("admin_college") || "");
     };
 
     loadAdminProfile();
@@ -98,6 +108,25 @@ export default function AdminLayout() {
 
     return () => {
       window.removeEventListener("storage", loadAdminProfile);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadRooms = () => {
+      fetchRooms()
+        .then((data) => {
+          if (active) setRooms(data || []);
+        })
+        .catch((error) => {
+          console.error("Unable to load admin room navigation:", error);
+        });
+    };
+    loadRooms();
+    window.addEventListener("admin-rooms-updated", loadRooms);
+    return () => {
+      active = false;
+      window.removeEventListener("admin-rooms-updated", loadRooms);
     };
   }, []);
 
@@ -142,9 +171,9 @@ export default function AdminLayout() {
       icon: <AccountCircleIcon />,
       children: [
         {
-          segment: "officials",
-          title: "Officials",
-          icon: <GroupsIcon />,
+          segment: "admins",
+          title: "Admins",
+          icon: <AccountCircleIcon />,
         },
         {
           segment: "students",
@@ -154,9 +183,47 @@ export default function AdminLayout() {
       ],
     },
     {
-      segment: "room",
-      title: "Room",
+      segment: "rooms",
+      title: "Rooms",
       icon: <MeetingRoomIcon />,
+      children: [
+        {
+          segment: "main",
+          title: "Main",
+          icon: <MeetingRoomIcon />,
+        },
+        ...rooms.map((room) => ({
+          segment: String(room.room_id),
+          title: room.room_name,
+          navigationKey: `room-${room.room_id}`,
+          icon: <FolderSpecialIcon />,
+          children: [
+            {
+              segment: "hub",
+              title: "Hub",
+              icon: <HomeWorkIcon />,
+            },
+            {
+              segment: "governance",
+              title: "Governance",
+              navigationKey: `room-${room.room_id}-governance`,
+              icon: <AccountBalanceIcon />,
+              children: [
+                {
+                  segment: "announcement",
+                  title: "Announcement",
+                  icon: <CampaignIcon />,
+                },
+                {
+                  segment: "event-scheduler",
+                  title: "Event Scheduler",
+                  icon: <EventNoteIcon />,
+                },
+              ],
+            },
+          ],
+        })),
+      ],
     },
     {
       segment: "audit",
@@ -230,7 +297,8 @@ export default function AdminLayout() {
               {firstName} {lastName}
             </Typography>
             <Typography variant="caption" sx={{ color: "#a9b9bf" }}>
-              Administrator
+              {adminPosition || "Administrator"}
+              {adminCollege ? ` - ${adminCollege}` : ""}
             </Typography>
           </Stack>
         )}

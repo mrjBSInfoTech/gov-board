@@ -29,15 +29,19 @@ export const authenticateOfficer = (req, res, next) => {
       }
 
       db.query(
-        "SELECT role FROM student WHERE student_id = ? LIMIT 1",
-        [officerId],
+        `SELECT EXISTS (
+                  SELECT 1 FROM room_member
+                   WHERE member_id = ? AND member_type = 'officer'
+                ) AS has_officer_membership
+           FROM student WHERE student_id = ? LIMIT 1`,
+        [officerId, officerId],
         (dbErr, rows) => {
           if (dbErr) {
             console.error("Officer role verification error:", dbErr);
             return res.status(500).json({ message: "Unable to verify account role." });
           }
 
-          if (rows.length === 0 || !rows[0].role) {
+          if (rows.length === 0 || !rows[0].has_officer_membership) {
             return res.status(403).json({
               message: "This account is now a student. Please use the student panel.",
               roleChanged: true,

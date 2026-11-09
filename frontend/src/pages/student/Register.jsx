@@ -49,6 +49,8 @@ export default function Register() {
     first_name: "",
     last_name: "",
     student_number: "",
+    college: "",
+    course: "",
     year: "",
     section: "",
     password: "",
@@ -96,6 +98,7 @@ export default function Register() {
       !form.first_name ||
       !form.last_name ||
       !form.student_number ||
+      !form.college.trim() ||
       !form.year ||
       !form.section ||
       !form.password ||
@@ -121,6 +124,8 @@ export default function Register() {
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
         student_number: form.student_number.trim(),
+        college: form.college.trim(),
+        course: form.course.trim(),
         year: form.year.trim(),
         section: form.section.trim(),
         password: form.password,
@@ -323,6 +328,29 @@ export default function Register() {
                 }}
               />
             </Box>
+
+            <TextField
+              fullWidth
+              label="College"
+              placeholder="Enter your college"
+              name="college"
+              value={form.college}
+              onChange={handleChange}
+              size="small"
+              required
+              InputProps={{ sx: inputStyle }}
+            />
+            <TextField
+              fullWidth
+              label="Course"
+              placeholder="Enter your course"
+              name="course"
+              value={form.course}
+              onChange={handleChange}
+              size="small"
+              inputProps={{ maxLength: 150 }}
+              InputProps={{ sx: inputStyle }}
+            />
 
             {/* Academic details */}
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>

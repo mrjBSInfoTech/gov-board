@@ -2,92 +2,74 @@ import express from "express";
 import db from "../../database/db.js";
 import { authenticateStudent } from "../../middleware/studentAuthMiddleware.js";
 import { logStudentAudit } from "../../utils/student/studentAuditLogger.js";
+import { findRoomByCode } from "../../utils/shared/roomJoin.js";
 
 const router = express.Router();
 
 // GET validate a room code
-router.get("/room/validate/:roomNumber", authenticateStudent, (req, res) => {
-  const { roomNumber } = req.params;
+router.get("/room/validate/:roomNumber", authenticateStudent, async (req, res) => {
+  const studentId = Number(req.user.student_id);
+  if (!Number.isSafeInteger(studentId) || studentId < 1) {
+    return res.status(403).json({ error: "Unable to identify student" });
+  }
 
-  const sql = `
-    SELECT room_id, room_number, room_name 
-    FROM room 
-    WHERE room_number = ? 
-    LIMIT 1`;
-
-  db.query(sql, [roomNumber], (err, results) => {
-    if (err) {
-      console.error("DB Error:", err);
-      return res.status(500).json({ error: "Failed to validate room code" });
-    }
-
-    if (results.length === 0) {
+  const connection = db.promise();
+  try {
+    await connection.beginTransaction();
+    const room = await findRoomByCode(connection, req.params.roomNumber);
+    if (!room) {
+      await connection.rollback();
       return res.status(404).json({ error: "Invalid room code" });
     }
 
-    const studentId = req.user.student_id;
-    if (!studentId) {
-      return res.status(403).json({ error: "Unable to identify student" });
-    }
-
-    db.query(
-      "SELECT student_id FROM student WHERE student_id = ? LIMIT 1",
-      [studentId],
-      (lookupErr, studentRows) => {
-        if (lookupErr) {
-          console.error("Student lookup error:", lookupErr);
-          return res.status(500).json({ error: "Unable to join room" });
-        }
-
-        if (studentRows.length === 0) {
-          return res.status(404).json({ error: "Student account not found" });
-        }
-
-        db.query(
-          "DELETE FROM room_member WHERE member_type = 'student' AND member_id = ?",
-          [studentId],
-          (removeErr) => {
-            if (removeErr) {
-              console.error("Previous room membership cleanup error:", removeErr);
-              return res.status(500).json({ error: "Unable to join room" });
-            }
-
-            db.query(
-              `INSERT INTO room_member (room_id, member_type, member_id)
-               VALUES (?, 'student', ?)
-               ON DUPLICATE KEY UPDATE member_id = VALUES(member_id)`,
-              [results[0].room_id, studentId],
-              (updateErr) => {
-                if (updateErr) {
-                  console.error("Room membership update error:", updateErr);
-                  return res.status(500).json({ error: "Unable to join room" });
-                }
-
-                void logStudentAudit(studentId, {
-                  action: "Join room",
-                  role: "Student",
-                  status: "SUCCESS",
-                  information: `Joined room ${results[0].room_id}`,
-                });
-                res.json(results[0]);
-              },
-            );
-          },
-        );
-      },
+    await connection.query(
+      "DELETE FROM room_member WHERE room_id = ? AND member_id = ?",
+      [room.room_id, studentId],
     );
-  });
+    await connection.query(
+      `INSERT INTO room_member (room_id, member_type, member_id, position)
+       VALUES (?, 'student', ?, 'Student')`,
+      [room.room_id, studentId],
+    );
+    await connection.commit();
+    req.auditRoomId = room.room_id;
+
+    void logStudentAudit(studentId, {
+      action: "Join room",
+      role: "Student",
+      status: "SUCCESS",
+      room_id: room.room_id,
+      information: `Joined room ${room.room_id}`,
+    });
+    res.json({
+      ...room,
+      member_type: "student",
+      position: "Student",
+    });
+  } catch (error) {
+    try {
+      await connection.rollback();
+    } catch (rollbackError) {
+      console.error("Student room join rollback error:", rollbackError);
+    }
+    console.error("Student room join error:", error);
+    res.status(500).json({ error: "Unable to join room" });
+  }
 });
 
 router.delete("/room", authenticateStudent, (req, res) => {
   const studentId = req.user.student_id;
+  const roomId = Number(req.body?.roomId);
   if (!studentId) {
     return res.status(403).json({ error: "Unable to identify student" });
   }
+  if (!Number.isSafeInteger(roomId) || roomId < 1) {
+    return res.status(400).json({ error: "A valid room is required." });
+  }
 
   db.query(
-    "DELETE FROM room_member WHERE member_type = 'student' AND member_id = ?",
-    [studentId],
+    "DELETE FROM room_member WHERE room_id = ? AND member_id = ?",
+    [roomId, studentId],
     (err, result) => {
       if (err) {
         console.error("Student leave room error:", err);
@@ -103,32 +85,43 @@ router.delete("/room", authenticateStudent, (req, res) => {
 
 // GET all announcements for a room
 router.get("/", authenticateStudent, (req, res) => {
-  const { roomId } = req.query;
+  const roomId = Number(req.query.roomId);
 
-  if (!roomId) {
+  if (!Number.isSafeInteger(roomId) || roomId < 1) {
     return res.status(400).json({ error: "roomId is required" });
   }
 
-  const sql = `
-    SELECT 
-      announcement_id,
-      room_id,
-      announcement_body,
-      link,
-      image,
-      date_created
-    FROM announcement
-    WHERE room_id = ?
-    ORDER BY date_created DESC, announcement_id DESC
-  `;
+  db.query(
+    `SELECT room_id FROM room_member
+      WHERE room_id = ? AND member_id = ? AND member_type = 'student'
+      LIMIT 1`,
+    [roomId, req.user.student_id],
+    (membershipError, memberships) => {
+      if (membershipError) {
+        console.error("Student room membership lookup error:", membershipError);
+        return res.status(500).json({ error: "Unable to verify room membership." });
+      }
+      if (!memberships.length) {
+        return res.status(403).json({ error: "You are not a student member of this room." });
+      }
 
-  db.query(sql, [roomId], (err, results) => {
-    if (err) {
-      console.error("DB Error:", err);
-      return res.status(500).json({ error: err.message });
-    }
-    res.json(results);
-  });
+      db.query(
+        `SELECT announcement_id, room_id, announcement_body, link, image,
+                date_created
+           FROM announcement
+          WHERE room_id = ?
+          ORDER BY date_created DESC, announcement_id DESC`,
+        [roomId],
+        (err, results) => {
+          if (err) {
+            console.error("Student announcements query error:", err);
+            return res.status(500).json({ error: "Unable to load announcements." });
+          }
+          res.json(results);
+        },
+      );
+    },
+  );
 });
 
 export default router;
