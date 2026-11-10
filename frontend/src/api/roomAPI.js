@@ -6,12 +6,15 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
+  const routeSection = window.location.pathname.split("/")[1];
   const authSection = localStorage.getItem("auth_section");
-  const token =
-    (authSection && localStorage.getItem(`${authSection}_token`)) ||
-    localStorage.getItem("officer_token") ||
-    localStorage.getItem("student_token") ||
-    localStorage.getItem("admin_token");
+  const isPanelRoute = ["admin", "officer", "student"].includes(routeSection);
+  const token = isPanelRoute
+    ? localStorage.getItem(`${routeSection}_token`)
+    : (authSection && localStorage.getItem(`${authSection}_token`)) ||
+      localStorage.getItem("officer_token") ||
+      localStorage.getItem("student_token") ||
+      localStorage.getItem("admin_token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -42,6 +45,56 @@ export const fetchRoomMessages = async (roomId) => {
 export const fetchRoomMembers = async (roomId) => {
   try {
     const response = await api.get(`/${roomId}/members`);
+    return response.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+
+export const requestRoomJoin = async (roomNumber) => {
+  const normalizedRoomNumber =
+    typeof roomNumber === "string" ? roomNumber.trim() : "";
+  if (!normalizedRoomNumber) throw new Error("A room code is required.");
+
+  try {
+    const response = await api.post("/join-requests", {
+      roomNumber: normalizedRoomNumber,
+    });
+    return response.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+
+export const fetchRoomJoinRequests = async (roomId) => {
+  if (!Number.isSafeInteger(Number(roomId)) || Number(roomId) < 1) {
+    throw new Error("A valid room is required to load join requests.");
+  }
+
+  try {
+    const response = await api.get(`/${roomId}/join-requests`);
+    return response.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+
+export const decideRoomJoinRequest = async (roomId, requestId, decision) => {
+  if (
+    !Number.isSafeInteger(Number(roomId)) ||
+    Number(roomId) < 1 ||
+    !Number.isSafeInteger(Number(requestId)) ||
+    Number(requestId) < 1 ||
+    !["approve", "reject"].includes(decision)
+  ) {
+    throw new Error("A valid room, request, and decision are required.");
+  }
+
+  try {
+    const response = await api.patch(
+      `/${roomId}/join-requests/${requestId}`,
+      { decision },
+    );
     return response.data;
   } catch (error) {
     handleError(error);

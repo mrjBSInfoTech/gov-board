@@ -9,6 +9,8 @@ import db from "../database/db.js";
 import { isRoomMember } from "../utils/shared/roomMembership.js";
 import { awardRoomXp } from "../utils/shared/roomLevelService.js";
 import { getAdminRoomAccess } from "../utils/shared/adminRoomAccess.js";
+import { findRoomByCode } from "../utils/shared/roomJoin.js";
+import { canReviewRoomJoinRequests } from "../utils/shared/roomJoinRequestAccess.js";
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -172,6 +174,7 @@ const authorizeRoomMember = async (req, res, next) => {
       req.roomMemberType = "admin";
       req.isSuperAdmin = adminRoomAccess.isSuperAdmin;
       req.adminCollege = adminRoomAccess.college;
+      req.roomCollege = adminRoomAccess.roomCollege;
       return next();
     } catch (error) {
       console.error("Room existence check error:", error);
@@ -206,16 +209,43 @@ const authorizeRoomMember = async (req, res, next) => {
   }
 };
 
+const requireRoomMemberNotMuted = async (req, res, next) => {
+  if (req.roomMemberType === "admin") return next();
+
+  try {
+    const [memberships] = await db.promise().query(
+      `SELECT DATE_FORMAT(muted_until, '%Y-%m-%dT%H:%i:%sZ') AS muted_until
+         FROM room_member
+        WHERE room_id = ? AND member_id = ?
+          AND muted_until > UTC_TIMESTAMP()
+        LIMIT 1`,
+      [req.roomId, req.roomMemberId],
+    );
+    if (memberships.length) {
+      return res.status(403).json({
+        message: "You are muted in this room and cannot send messages or files.",
+        muted_until: memberships[0].muted_until,
+      });
+    }
+    return next();
+  } catch (error) {
+    console.error("Room mute status check error:", error);
+    return res.status(500).json({ message: "Unable to verify room mute status." });
+  }
+};
+
 router.get(
   "/:roomId/members",
   authenticateRoomUser,
   authorizeRoomMember,
   (req, res) => {
     const collegeFilter =
-      req.roomMemberType === "admin" && !req.isSuperAdmin
+      req.roomMemberType === "admin" &&
+      !req.isSuperAdmin &&
+      req.roomCollege?.trim()
         ? " AND s.college = ?"
         : "";
-    const params = req.isSuperAdmin || req.roomMemberType !== "admin"
+    const params = !collegeFilter
       ? [req.roomId]
       : [req.roomId, req.adminCollege];
     db.query(
@@ -236,6 +266,172 @@ router.get(
         res.json(results);
       },
     );
+  },
+);
+
+router.post("/join-requests", authenticateRoomUser, async (req, res) => {
+  const memberId = Number(req.user.officer_id || req.user.student_id || req.user.id);
+  const roomNumber =
+    typeof req.body?.roomNumber === "string" ? req.body.roomNumber.trim() : "";
+  if (req.user.admin_id || !Number.isSafeInteger(memberId) || memberId < 1) {
+    return res.status(403).json({ message: "A student or officer account is required." });
+  }
+  if (!roomNumber) {
+    return res.status(400).json({ message: "A room code is required." });
+  }
+
+  const connection = db.promise();
+  try {
+    await connection.beginTransaction();
+    const room = await findRoomByCode(connection, roomNumber);
+    if (!room) {
+      await connection.rollback();
+      return res.status(404).json({ message: "Room not found. Please check the code." });
+    }
+
+    const [memberships] = await connection.query(
+      "SELECT room_member_id FROM room_member WHERE room_id = ? AND member_id = ? LIMIT 1",
+      [room.room_id, memberId],
+    );
+    if (memberships.length) {
+      await connection.rollback();
+      return res.status(409).json({ message: "You are already a member of this room." });
+    }
+
+    await connection.query(
+      `INSERT INTO room_join_request (room_id, member_id, status)
+       VALUES (?, ?, 'pending')
+       ON DUPLICATE KEY UPDATE
+         status = 'pending',
+         requested_at = CURRENT_TIMESTAMP,
+         decided_by_type = NULL,
+         decided_by_id = NULL,
+         decided_at = NULL`,
+      [room.room_id, memberId],
+    );
+    await connection.commit();
+    req.auditRoomId = room.room_id;
+    return res.status(202).json({
+      message: `Your request to join ${room.room_name} was sent for approval.`,
+      room_id: room.room_id,
+      room_name: room.room_name,
+    });
+  } catch (error) {
+    try {
+      await connection.rollback();
+    } catch (rollbackError) {
+      console.error("Room join request rollback error:", rollbackError);
+    }
+    console.error("Room join request error:", error);
+    return res.status(500).json({ message: "Unable to submit room join request." });
+  }
+});
+
+const requireJoinRequestManager = (req, res, next) => {
+  if (
+    !canReviewRoomJoinRequests(
+      { roomId: req.roomId, memberType: req.roomMemberType },
+      req.params.roomId,
+    )
+  ) {
+    return res.status(403).json({
+      message: "Only an admin or officer in this room can manage join requests.",
+    });
+  }
+  next();
+};
+
+router.get(
+  "/:roomId/join-requests",
+  authenticateRoomUser,
+  authorizeRoomMember,
+  requireJoinRequestManager,
+  async (req, res) => {
+    try {
+      const [requests] = await db.promise().query(
+        `SELECT jr.join_request_id, jr.room_id, jr.member_id, jr.requested_at,
+                s.first_name, s.last_name, b.section_name AS section
+           FROM room_join_request jr
+           INNER JOIN student s ON s.student_id = jr.member_id
+           LEFT JOIN batch b ON b.batch_id = s.batch_id
+          WHERE jr.room_id = ? AND jr.status = 'pending'
+          ORDER BY jr.requested_at ASC, jr.join_request_id ASC`,
+        [req.roomId],
+      );
+      return res.json(requests);
+    } catch (error) {
+      console.error("Room join request list error:", error);
+      return res.status(500).json({ message: "Unable to load room join requests." });
+    }
+  },
+);
+
+router.patch(
+  "/:roomId/join-requests/:requestId",
+  authenticateRoomUser,
+  authorizeRoomMember,
+  requireJoinRequestManager,
+  async (req, res) => {
+    const roomId = req.roomId;
+    const requestId = Number(req.params.requestId);
+    const { decision } = req.body;
+    if (
+      !Number.isSafeInteger(requestId) ||
+      requestId < 1 ||
+      !["approve", "reject"].includes(decision)
+    ) {
+      return res.status(400).json({ message: "A valid request and decision are required." });
+    }
+
+    const connection = db.promise();
+    try {
+      await connection.beginTransaction();
+      const [requests] = await connection.query(
+        `SELECT join_request_id, member_id, status
+           FROM room_join_request
+          WHERE room_id = ? AND join_request_id = ?
+          LIMIT 1 FOR UPDATE`,
+        [roomId, requestId],
+      );
+      if (!requests.length) {
+        await connection.rollback();
+        return res.status(404).json({ message: "Join request not found in this room." });
+      }
+      if (requests[0].status !== "pending") {
+        await connection.rollback();
+        return res.status(409).json({ message: "This join request has already been handled." });
+      }
+
+      const requestStatus = decision === "approve" ? "approved" : "rejected";
+      if (decision === "approve") {
+        await connection.query(
+          `INSERT IGNORE INTO room_member (room_id, member_type, member_id, position)
+           VALUES (?, 'student', ?, 'Student')`,
+          [roomId, requests[0].member_id],
+        );
+      }
+      await connection.query(
+        `UPDATE room_join_request
+            SET status = ?, decided_by_type = ?, decided_by_id = ?,
+                decided_at = CURRENT_TIMESTAMP
+          WHERE room_id = ? AND join_request_id = ? AND status = 'pending'`,
+        [requestStatus, req.roomMemberType, req.roomMemberId, roomId, requestId],
+      );
+      await connection.commit();
+      req.auditRoomId = roomId;
+      return res.json({
+        message: decision === "approve" ? "Join request approved." : "Join request declined.",
+        status: requestStatus,
+      });
+    } catch (error) {
+      try {
+        await connection.rollback();
+      } catch (rollbackError) {
+        console.error("Room join request decision rollback error:", rollbackError);
+      }
+      console.error("Room join request decision error:", error);
+      return res.status(500).json({ message: "Unable to update room join request." });
+    }
   },
 );
 
@@ -410,6 +606,7 @@ router.post(
   "/:roomId/messages",
   authenticateRoomUser,
   authorizeRoomMember,
+  requireRoomMemberNotMuted,
   uploadChatMedia,
   (req, res) => {
     const roomId = req.roomId;

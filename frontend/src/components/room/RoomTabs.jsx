@@ -13,12 +13,10 @@ import AccountDemote from "../admin/Account/AccountDemote";
 import { promoteStudent } from "../../api/admin/studentAPI";
 import { demoteAccount } from "../../api/admin/accountAPI";
 import { API_BASE_URL } from "../../api/apiBaseURL";
-import {
-  promoteOfficerMember,
-  demoteOfficerMember,
-} from "../../api/officer/memberAPI";
+import { getAnnouncementImages } from "../../utils/announcementImages";
 
 const FILE_BASE_URL = `${API_BASE_URL}/uploads/officer/uploadAnnouncement`;
+const GOVERNANCE_IMAGE_BASE_URL = `${API_BASE_URL}/uploads/admin/governanceAnnouncement`;
 const MAX_CHAT_MEDIA_SIZE = 50 * 1024 * 1024;
 const CHAT_MEDIA_EXTENSIONS = new Set([
   "jpg", "jpeg", "png", "gif", "webp",
@@ -46,16 +44,6 @@ export default function RoomTabs({
   roomId,
   canManageMembers = false,
 }) {
-  const isAdminSession = Boolean(localStorage.getItem("admin_token"));
-  const officerRanks = [
-    "Mayor",
-    "Vice-Mayor",
-    "Secretary",
-    "Treasurer",
-    "Auditor",
-    "P.I.O.",
-    "Protocol Officer",
-  ];
   const [chatFilesOpen, setChatFilesOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -74,31 +62,6 @@ export default function RoomTabs({
   const [promoteError, setPromoteError] = useState("");
   const [requiresConfirmation, setRequiresConfirmation] = useState(false);
   const [demoteDialogOpen, setDemoteDialogOpen] = useState(false);
-  const officerId = Number(localStorage.getItem("officer_officer_id"));
-  const currentOfficerMembership = members.find(
-    (member) => Number(member.member_id) === officerId,
-  );
-  const officerPosition = currentOfficerMembership?.position?.replace(
-    "Vice Mayor",
-    "Vice-Mayor",
-  );
-  const officerRank = officerRanks.indexOf(officerPosition);
-  const isOfficerManager = Boolean(
-    !isAdminSession &&
-      localStorage.getItem("officer_token") &&
-      currentOfficerMembership?.member_type === "officer" &&
-      officerRank >= 0,
-  );
-  const officerPositionOptions = isOfficerManager
-    ? officerRanks.slice(officerRank + 1)
-    : officerRanks;
-  const canManageOfficerMember = (member) => {
-    if (!isOfficerManager) return true;
-    const memberRank = officerRanks.indexOf(
-      member.position?.replace("Vice Mayor", "Vice-Mayor"),
-    );
-    return member.member_type === "student" || memberRank > officerRank;
-  };
 
   const loadMessages = useCallback(
     async (showLoading = false) => {
@@ -162,14 +125,18 @@ export default function RoomTabs({
     () =>
       announcements.reduce(
         (items, announcement) => {
-          if (announcement.image) {
+          const imageBaseUrl =
+            announcement.source_type === "governance"
+              ? GOVERNANCE_IMAGE_BASE_URL
+              : FILE_BASE_URL;
+          getAnnouncementImages(announcement).forEach((image) => {
             items.media.push({
-              id: `image-${announcement.announcement_id}`,
-              name: announcement.image,
-              url: `${FILE_BASE_URL}/${announcement.image}`,
+              id: `image-${announcement.announcement_id}-${image}`,
+              name: image,
+              url: `${imageBaseUrl}/${encodeURIComponent(image)}`,
               type: "image",
             });
-          }
+          });
           if (announcement.link) {
             items.links.push({
               id: `link-${announcement.announcement_id}`,
@@ -271,21 +238,12 @@ export default function RoomTabs({
     if (!selectedMember || !promotePosition) return;
 
     try {
-      if (isOfficerManager) {
-        await promoteOfficerMember(
-          selectedMember.member_id,
-          roomId,
-          promotePosition,
-          requiresConfirmation,
-        );
-      } else {
-        await promoteStudent(
-          selectedMember.member_id,
-          promotePosition,
-          requiresConfirmation,
-          roomId,
-        );
-      }
+      await promoteStudent(
+        selectedMember.member_id,
+        promotePosition,
+        requiresConfirmation,
+        roomId,
+      );
       setPromoteDialogOpen(false);
       setSelectedMember(null);
       setPromotePosition("");
@@ -313,11 +271,7 @@ export default function RoomTabs({
     if (!selectedMember) return;
 
     try {
-      if (isOfficerManager) {
-        await demoteOfficerMember(selectedMember.member_id, roomId);
-      } else {
-        await demoteAccount(selectedMember.member_id, roomId);
-      }
+      await demoteAccount(selectedMember.member_id, roomId);
       setDemoteDialogOpen(false);
       setSelectedMember(null);
       loadMembers();
@@ -384,7 +338,6 @@ export default function RoomTabs({
         onConfirm={handleConfirmPromotion}
         error={promoteError}
         requiresConfirmation={requiresConfirmation}
-        positionOptions={officerPositionOptions}
       />
 
       <AccountDemote
@@ -404,10 +357,7 @@ export default function RoomTabs({
         loading={loadingMembers}
         error={error}
         onClearError={clearError}
-        canManageMembers={
-          canManageMembers && (isAdminSession || isOfficerManager)
-        }
-        canManageMember={canManageOfficerMember}
+        canManageMembers={canManageMembers}
         onPromote={handlePromote}
         onDemote={handleDemote}
       />

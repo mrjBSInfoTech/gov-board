@@ -5,6 +5,14 @@ export const getAdminCollegeFilter = (req, column) =>
     ? { sql: "", params: [] }
     : { sql: ` AND ${column} = ?`, params: [req.user.college] };
 
+export const getAdminRoomCollegeFilter = (req, column) =>
+  req.user.is_super_admin
+    ? { sql: "", params: [] }
+    : {
+        sql: ` AND (NULLIF(TRIM(${column}), '') IS NULL OR ${column} = ?)`,
+        params: [req.user.college],
+      };
+
 export const resolveAdminCollege = (req, requestedCollege) => {
   const requested = String(requestedCollege ?? "").trim();
   if (req.user.is_super_admin) return requested;

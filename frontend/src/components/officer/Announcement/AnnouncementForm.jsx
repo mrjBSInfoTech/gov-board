@@ -18,8 +18,8 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import DeleteIcon from "@mui/icons-material/Delete";
-import ImageIcon from "@mui/icons-material/Image";
 import { API_BASE_URL } from "../../../api/apiBaseURL";
+import { getAnnouncementImages } from "../../../utils/announcementImages";
 
 // Animation transition
 const Transition = React.forwardRef(function Transition(props, ref) {
@@ -33,8 +33,8 @@ function AnnouncementForm({ open, handleClose, initialData, onSubmit, loading })
 
   const [announcementBody, setAnnouncementBody] = useState("");
   const [link, setLink] = useState("");
-  const [file, setFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
+  const [files, setFiles] = useState([]);
+  const [filePreviews, setFilePreviews] = useState([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -42,36 +42,35 @@ function AnnouncementForm({ open, handleClose, initialData, onSubmit, loading })
       if (initialData) {
         setAnnouncementBody(initialData.announcement_body || initialData.description || "");
         setLink(initialData.link || "");
-        setFile(null);
-        if (initialData.image) {
-          setPreviewUrl(`${IMAGE_BASE_URL}/${initialData.image}`);
-        } else {
-          setPreviewUrl(null);
-        }
+        setFiles([]);
       } else {
-        // Reset form for new announcement
         setAnnouncementBody("");
         setLink("");
-        setFile(null);
-        setPreviewUrl(null);
+        setFiles([]);
       }
       setError("");
     }
   }, [open, initialData]);
 
+  useEffect(() => {
+    const previews = files.map((file) => ({
+      file,
+      url: URL.createObjectURL(file),
+    }));
+    setFilePreviews(previews);
+    return () => previews.forEach(({ url }) => URL.revokeObjectURL(url));
+  }, [files]);
+
   const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-      setPreviewUrl(URL.createObjectURL(selectedFile));
-    }
+    const selectedFiles = Array.from(e.target.files || []);
+    setFiles((currentFiles) => [...currentFiles, ...selectedFiles]);
+    e.target.value = "";
   };
 
-  const handleRemoveImage = (e) => {
+  const handleRemoveImage = (e, index) => {
     e.stopPropagation();
     e.preventDefault();
-    setFile(null);
-    setPreviewUrl(null);
+    setFiles((currentFiles) => currentFiles.filter((_, fileIndex) => fileIndex !== index));
   };
 
   const handleSubmit = (e) => {
@@ -86,7 +85,7 @@ function AnnouncementForm({ open, handleClose, initialData, onSubmit, loading })
     const payload = {
       announcement_body: announcementBody.trim(),
       link: link.trim(),
-      file,
+      files,
     };
 
     onSubmit(payload);
@@ -148,25 +147,24 @@ function AnnouncementForm({ open, handleClose, initialData, onSubmit, loading })
               disabled={loading}
             />
 
-            {/* Image Upload Area */}
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                Attach Image (Optional)
+                Attach Photos (Optional)
               </Typography>
 
               <Box
                 component="label"
-                htmlFor="announcement-image-input"
+                htmlFor="announcement-images-input"
                 sx={{
                   display: "block",
                   width: "100%",
                   boxSizing: "border-box",
                   border: "2px dashed",
-                  borderColor: previewUrl ? "primary.main" : "grey.300",
+                  borderColor: "grey.300",
                   borderRadius: 2,
-                  p: previewUrl ? 2 : 3,
+                  p: 3,
                   textAlign: "center",
-                  bgcolor: previewUrl ? "grey.50" : "grey.50",
+                  bgcolor: "grey.50",
                   cursor: "pointer",
                   transition: "all 0.2s ease-in-out",
                   "&:hover": {
@@ -176,78 +174,79 @@ function AnnouncementForm({ open, handleClose, initialData, onSubmit, loading })
                 }}
               >
                 <input
-                  id="announcement-image-input"
+                  id="announcement-images-input"
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  multiple
                   style={{ display: "none" }}
                   onChange={handleFileChange}
                   disabled={loading}
                 />
-
-                {previewUrl ? (
-                  <Box
-                    sx={{
-                      position: "relative",
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                    }}
-                  >
-                    <Box
-                      component="img"
-                      src={previewUrl}
-                      alt="Selected Preview"
-                      sx={{
-                        maxHeight: 220,
-                        maxWidth: "100%",
-                        borderRadius: 2,
-                        objectFit: "cover",
-                        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                      }}
-                    />
-                    <Box
-                      sx={{
-                        mt: 1.5,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 1,
-                      }}
-                    >
-                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
-                        {file ? file.name : "Attached Image"}
-                      </Typography>
-                      <Tooltip title="Remove Image">
+                <CloudUploadIcon color="primary" sx={{ fontSize: 40 }} />
+                <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary" }}>
+                  Click to choose one or more photos
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  JPG, PNG, GIF, WEBP; up to 10 MB per photo
+                </Typography>
+              </Box>
+              {(getAnnouncementImages(initialData).length > 0 ||
+                filePreviews.length > 0) && (
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))",
+                    gap: 1,
+                    mt: 1.5,
+                  }}
+                >
+                  {getAnnouncementImages(initialData).map((image) => (
+                    <Box key={`saved-${image}`}>
+                      <Box
+                        component="img"
+                        src={`${IMAGE_BASE_URL}/${image}`}
+                        alt="Attached announcement"
+                        sx={{
+                          width: "100%",
+                          height: 100,
+                          objectFit: "cover",
+                          borderRadius: 1,
+                        }}
+                      />
+                    </Box>
+                  ))}
+                  {filePreviews.map(({ file: previewFile, url }, index) => (
+                    <Box key={`${previewFile.name}-${index}`} sx={{ position: "relative" }}>
+                      <Box
+                        component="img"
+                        src={url}
+                        alt={previewFile.name}
+                        sx={{
+                          width: "100%",
+                          height: 100,
+                          objectFit: "cover",
+                          borderRadius: 1,
+                        }}
+                      />
+                      <Tooltip title="Remove photo">
                         <IconButton
                           size="small"
                           color="error"
-                          onClick={handleRemoveImage}
-                          sx={{ bgcolor: "error.50" }}
+                          onClick={(event) => handleRemoveImage(event, index)}
+                          sx={{
+                            position: "absolute",
+                            top: 4,
+                            right: 4,
+                            bgcolor: "background.paper",
+                          }}
                         >
                           <DeleteIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
                     </Box>
-                  </Box>
-                ) : (
-                  <Box
-                    sx={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 1,
-                    }}
-                  >
-                    <CloudUploadIcon color="primary" sx={{ fontSize: 44 }} />
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary" }}>
-                      Click to browse image to attach
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Supports JPG, PNG, GIF, WEBP
-                    </Typography>
-                  </Box>
-                )}
-              </Box>
+                  ))}
+                </Box>
+              )}
             </Box>
           </Stack>
         </DialogContent>

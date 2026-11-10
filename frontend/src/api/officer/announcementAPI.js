@@ -33,24 +33,17 @@ const handleError = (error) => {
 };
 
 // Fetch all announcements
-export const fetchAnnouncements = async (roomId = null) => {
+export const fetchAnnouncements = async (roomId, roomOnly = false) => {
+  if (!Number.isSafeInteger(Number(roomId)) || Number(roomId) < 1) {
+    throw new Error("A valid room is required to load announcements.");
+  }
   try {
-    const url = roomId ? `/officer/announcements?roomId=${roomId}` : "/officer/announcements";
-    const res = await api.get(url);
+    const res = await api.get("/officer/announcements", {
+      params: { roomId, roomOnly },
+    });
     return res.data;
   } catch (error) {
     console.error("Error in fetchAnnouncements:", error);
-    handleError(error);
-  }
-};
-
-// Validate room code
-export const validateRoomCode = async (roomCode) => {
-  try {
-    const res = await api.get(`/officer/announcements/room/validate/${roomCode}`);
-    return res.data;
-  } catch (error) {
-    console.error("Error in validateRoomCode:", error);
     handleError(error);
   }
 };
@@ -89,9 +82,12 @@ export const addAnnouncement = async (announcementData) => {
     formData.append("announcement_body", announcementData.announcement_body.trim());
     if (announcementData.link) formData.append("link", announcementData.link.trim());
     if (announcementData.room_id) formData.append("room_id", announcementData.room_id);
-    if (announcementData.file instanceof File) {
-      formData.append("file", announcementData.file);
-    }
+    const files = Array.isArray(announcementData.files)
+      ? announcementData.files
+      : announcementData.file instanceof File
+        ? [announcementData.file]
+        : [];
+    files.forEach((file) => formData.append("files", file));
 
     const res = await api.post(
       `/officer/announcements?roomId=${encodeURIComponent(announcementData.room_id)}`,
@@ -114,9 +110,12 @@ export const updateAnnouncement = async (id, announcementData) => {
     formData.append("announcement_body", announcementData.announcement_body.trim());
     formData.append("link", announcementData.link ? announcementData.link.trim() : "");
     if (announcementData.room_id) formData.append("room_id", announcementData.room_id);
-    if (announcementData.file instanceof File) {
-      formData.append("file", announcementData.file);
-    }
+    const files = Array.isArray(announcementData.files)
+      ? announcementData.files
+      : announcementData.file instanceof File
+        ? [announcementData.file]
+        : [];
+    files.forEach((file) => formData.append("files", file));
 
     const res = await api.put(
       `/officer/announcements/${id}?roomId=${encodeURIComponent(announcementData.room_id)}`,

@@ -1,7 +1,10 @@
 import express from "express";
 import db from "../../database/db.js";
 import { authenticateStudent } from "../../middleware/studentAuthMiddleware.js";
-import { getRoomCalendarEventPredicate } from "../../utils/shared/calendarEventScope.js";
+import {
+  getRoomCalendarEventPredicate,
+  getRoomCollegeMemberVisibilityPredicate,
+} from "../../utils/shared/calendarEventScope.js";
 
 const router = express.Router();
 
@@ -19,8 +22,13 @@ router.get("/", authenticateStudent, (req, res) => {
             e.created_by, e.date_created, e.date_updated
        FROM room r
        JOIN calendar_event e ON ${getRoomCalendarEventPredicate()}
+       JOIN student s ON s.student_id = ?
       WHERE r.room_id = ?
         AND e.start_at >= CURRENT_DATE
+        AND (
+          e.visibility_scope <> 'college'
+          OR ${getRoomCollegeMemberVisibilityPredicate("e.college")}
+        )
         AND EXISTS (
           SELECT 1
             FROM room_member
@@ -29,7 +37,7 @@ router.get("/", authenticateStudent, (req, res) => {
              AND member_id = ?
         )
       ORDER BY e.start_at ASC, e.event_id ASC`,
-    [roomId, roomId, studentId],
+    [studentId, roomId, roomId, studentId],
     (err, results) => {
       if (err) {
         console.error("Student calendar events query error:", err);

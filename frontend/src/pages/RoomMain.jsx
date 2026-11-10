@@ -17,20 +17,13 @@ import {
 } from "@mui/material";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import RoomLeaveDialog from "../components/room/RoomLeaveDialog";
-import { fetchMyRooms } from "../api/roomAPI";
-import {
-  leaveRoom as leaveStudentRoom,
-  validateRoomCode as validateStudentRoom,
-} from "../api/student/announcementAPI";
-import {
-  leaveRoom as leaveOfficerRoom,
-  validateRoomCode as validateOfficerRoom,
-} from "../api/officer/announcementAPI";
+import { fetchMyRooms, requestRoomJoin } from "../api/roomAPI";
+import { leaveRoom as leaveOfficerRoom } from "../api/officer/announcementAPI";
+import { leaveRoom as leaveStudentRoom } from "../api/student/announcementAPI";
 
 export default function RoomMain({ role }) {
   const isOfficer = role === "officer";
   const basePath = `/${role}`;
-  const validateRoom = isOfficer ? validateOfficerRoom : validateStudentRoom;
   const leaveRoom = isOfficer ? leaveOfficerRoom : leaveStudentRoom;
   const navigate = useNavigate();
   const [rooms, setRooms] = useState([]);
@@ -40,6 +33,7 @@ export default function RoomMain({ role }) {
   const [leaving, setLeaving] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const loadRequestId = useRef(0);
 
   const selectionStorageKey = isOfficer
@@ -76,11 +70,11 @@ export default function RoomMain({ role }) {
 
     setJoining(true);
     setError("");
+    setSuccess("");
     try {
-      const room = await validateRoom(roomCode.trim());
-      localStorage.setItem(selectionStorageKey, JSON.stringify(room));
+      const result = await requestRoomJoin(roomCode.trim());
       setRoomCode("");
-      window.dispatchEvent(new Event("room-membership-updated"));
+      setSuccess(result.message);
     } catch (joinError) {
       setError(joinError.message || "Unable to join this room.");
     } finally {
@@ -140,7 +134,7 @@ export default function RoomMain({ role }) {
             Rooms
           </Typography>
           <Typography color="text.secondary">
-            Open one of your rooms or join another with its room code.
+            Open one of your rooms or request access with a room code.
           </Typography>
         </Box>
         <Box
@@ -165,7 +159,7 @@ export default function RoomMain({ role }) {
             variant="contained"
             disabled={!roomCode.trim() || joining}
           >
-            {joining ? "Joining..." : "Join"}
+            {joining ? "Requesting..." : "Request to Join"}
           </Button>
         </Box>
       </Stack>
@@ -173,6 +167,11 @@ export default function RoomMain({ role }) {
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>
           {error}
+        </Alert>
+      )}
+      {success && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess("")}>
+          {success}
         </Alert>
       )}
 
@@ -199,7 +198,7 @@ export default function RoomMain({ role }) {
               No rooms yet
             </Typography>
             <Typography color="text.secondary">
-              Enter a room code above to join your first room.
+              Enter a room code above to request access to a room.
             </Typography>
           </Box>
         </Box>

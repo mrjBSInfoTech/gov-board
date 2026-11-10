@@ -5,6 +5,7 @@ import { Alert, Box, CircularProgress, Paper, Typography } from "@mui/material";
 import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
 import AttachMoneyOutlinedIcon from "@mui/icons-material/AttachMoneyOutlined";
 import EventNoteOutlinedIcon from "@mui/icons-material/EventNoteOutlined";
+import CampaignOutlinedIcon from "@mui/icons-material/CampaignOutlined";
 import HistoryOutlinedIcon from "@mui/icons-material/HistoryOutlined";
 import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
 import { canAccessGovernanceSection } from "../../utils/governanceAccess";
@@ -13,6 +14,7 @@ import Fund from "./Fund";
 import Audit from "./Audit";
 import Budget from "./Budget";
 import Moderate from "./Moderate";
+import OfficerAnnouncement from "./Announcement";
 import { fetchMyRoom } from "../../api/roomAPI";
 
 const SECTIONS = {
@@ -35,6 +37,11 @@ const SECTIONS = {
     title: "Event Scheduler",
     description: "Coordinate event assignments and responsibilities.",
     icon: EventNoteOutlinedIcon,
+  },
+  announcement: {
+    title: "Announcement",
+    description: "Create announcements for members of this room.",
+    icon: CampaignOutlinedIcon,
   },
   moderate: {
     title: "Moderate",
@@ -104,6 +111,9 @@ export default function GovernanceSection() {
   }
   if (sectionKey === "moderate") {
     return <Moderate key={roomId} roomId={Number(roomId)} position={membership.position} />;
+  }
+  if (sectionKey === "announcement") {
+    return <OfficerAnnouncement key={roomId} governancePage />;
   }
 
   const SectionIcon = section.icon;

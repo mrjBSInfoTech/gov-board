@@ -23,10 +23,13 @@ import AnnouncementCard from "../../components/officer/Announcement/Announcement
 import RoomTabs from "../../components/room/RoomTabs";
 import {
   fetchAnnouncements,
-  validateRoomCode,
   leaveRoom,
 } from "../../api/student/announcementAPI";
-import { fetchMyRoom, fetchMyRooms } from "../../api/roomAPI";
+import {
+  fetchMyRoom,
+  fetchMyRooms,
+  requestRoomJoin,
+} from "../../api/roomAPI";
 import RoomLevelBar from "../../components/room/RoomLevelBar";
 import RoomLeaveDialog from "../../components/room/RoomLeaveDialog";
 
@@ -183,15 +186,9 @@ export default function AnnouncementPage() {
     setRoomLoading(true);
     setError(null);
     try {
-      const room = await validateRoomCode(roomCodeInput.trim());
-      setJoinedRoom(room);
-      setAnnouncements([]);
-      if (joinedRoomStorageKey) {
-        localStorage.setItem(joinedRoomStorageKey, JSON.stringify(room));
-      }
-      setMyRooms(await fetchMyRooms());
-      window.dispatchEvent(new Event("room-membership-updated"));
-      showSnackbar(`Joined room: ${room.room_name}`, "success");
+      const result = await requestRoomJoin(roomCodeInput.trim());
+      setRoomCodeInput("");
+      showSnackbar(result.message, "success");
     } catch (err) {
       showSnackbar(err.message || "Invalid room code.", "error");
     } finally {
@@ -216,6 +213,7 @@ export default function AnnouncementPage() {
       setAnnouncements([]);
       setRoomCodeInput("");
       window.dispatchEvent(new Event("room-membership-updated"));
+      if (isRoomHub) navigate("/student/rooms/main");
       showSnackbar(nextRoom ? `You left the room. Switched to ${nextRoom.room_name}.` : "You left the room.", "success");
     } catch (err) {
       setError(err.message || "Unable to leave room.");
@@ -282,12 +280,23 @@ export default function AnnouncementPage() {
         </Box>
 
         {isRoomHub && (
-          <Button
-            variant="outlined"
-            onClick={() => navigate("/student/rooms/main")}
-          >
-            All Rooms
-          </Button>
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+            {hasCurrentRoom && (
+              <Button
+                variant="outlined"
+                color="error"
+                onClick={() => setLeaveDialogOpen(true)}
+              >
+                Leave Room
+              </Button>
+            )}
+            <Button
+              variant="outlined"
+              onClick={() => navigate("/student/rooms/main")}
+            >
+              All Rooms
+            </Button>
+          </Box>
         )}
 
         {joinedRoom && !isRoomHub && (
@@ -324,7 +333,7 @@ export default function AnnouncementPage() {
               >
                 <TextField
                   size="small"
-                  label="Join another room"
+                  label="Request another room"
                   value={roomCodeInput}
                   onChange={(event) => setRoomCodeInput(event.target.value)}
                   disabled={roomLoading}
@@ -347,15 +356,16 @@ export default function AnnouncementPage() {
             >
               Leave Room
             </Button>
-            <RoomLeaveDialog
-              open={leaveDialogOpen}
-              onClose={() => setLeaveDialogOpen(false)}
-              onConfirm={handleLeaveRoom}
-              loading={leaveLoading}
-            />
           </>
         )}
       </Box>
+
+      <RoomLeaveDialog
+        open={leaveDialogOpen}
+        onClose={() => setLeaveDialogOpen(false)}
+        onConfirm={handleLeaveRoom}
+        loading={leaveLoading}
+      />
 
       {/* Main Content Area */}
       {isRoomHub &&
@@ -430,7 +440,7 @@ export default function AnnouncementPage() {
                 disabled={!roomCodeInput.trim() || roomLoading}
                 sx={{ px: 3, fontWeight: "bold", whiteSpace: "nowrap" }}
               >
-                {roomLoading ? "Joining..." : "Join"}
+                {roomLoading ? "Requesting..." : "Request to Join"}
               </Button>
             </Box>
           </Paper>
@@ -512,7 +522,7 @@ export default function AnnouncementPage() {
               <Typography variant="body2" color="text.disabled">
                 {searchTerm
                   ? "Try adjusting your search query."
-                  : "When an officer posts an announcement, it will appear here."}
+                  : "When an officer or administrator posts an announcement for your college, it will appear here."}
               </Typography>
             </Paper>
           ) : (
@@ -527,7 +537,7 @@ export default function AnnouncementPage() {
             >
               {filteredAnnouncements.map((announcement) => (
                 <Box
-                  key={announcement.announcement_id}
+                  key={`${announcement.source_type}-${announcement.announcement_id}`}
                   sx={{ width: "100%", maxWidth: 600 }}
                 >
                   {/* No onEdit or onDelete passed, so buttons are hidden */}

@@ -1,7 +1,7 @@
 import express from "express";
 import db from "../../database/db.js";
 import { authenticateAdmin } from "../../middleware/adminAuthMiddleware.js";
-import { getAdminCollegeFilter } from "../../utils/shared/adminScope.js";
+import { getAdminRoomCollegeFilter } from "../../utils/shared/adminScope.js";
 import {
   getAdminEventScope,
   getRoomCalendarEventPredicate,
@@ -72,7 +72,10 @@ router.get("/", authenticateAdmin, async (req, res) => {
     : ` AND (
         e.visibility_scope = 'global'
         OR (e.visibility_scope = 'college' AND e.college = ?)
-        OR (e.visibility_scope = 'room' AND r.college = ?)
+        OR (
+          e.visibility_scope = 'room'
+          AND (NULLIF(TRIM(r.college), '') IS NULL OR r.college = ?)
+        )
       )`;
   const params = req.user.is_super_admin
     ? []
@@ -112,7 +115,7 @@ router.get("/room/:roomId", authenticateAdmin, async (req, res) => {
     return res.status(400).json({ message: "A valid room ID is required." });
   }
 
-  const collegeFilter = getAdminCollegeFilter(req, "r.college");
+  const collegeFilter = getAdminRoomCollegeFilter(req, "r.college");
   try {
     const [events] = await db.promise().query(
       `SELECT e.event_id, e.room_id, e.visibility_scope, e.college, e.title,

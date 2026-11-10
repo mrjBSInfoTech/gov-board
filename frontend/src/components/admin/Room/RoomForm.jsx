@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
+  Alert,
+  Autocomplete,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -12,11 +14,17 @@ import {
   IconButton,
   Tooltip,
   Box,
+  FormControl,
+  FormControlLabel,
+  FormLabel,
+  Radio,
+  RadioGroup,
   Typography,
 } from "@mui/material";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import { fetchColleges } from "../../../api/admin/roomAPI";
 
 const Transition = React.forwardRef(function Transition(props, ref) {
   return (
@@ -51,9 +59,14 @@ function RoomForm({ open, handleClose, selectedRoom, onSubmit }) {
     room_number: "",
     room_name: "",
     description: "",
+    all_colleges: true,
+    colleges: [],
   });
   const [errors, setErrors] = useState({});
   const [copied, setCopied] = useState(false);
+  const [colleges, setColleges] = useState([]);
+  const [collegesLoading, setCollegesLoading] = useState(false);
+  const [collegesError, setCollegesError] = useState("");
 
   const isEdit = Boolean(selectedRoom);
 
@@ -68,16 +81,37 @@ function RoomForm({ open, handleClose, selectedRoom, onSubmit }) {
           room_number: selectedRoom.room_number || generateCode(),
           room_name: selectedRoom.room_name || "",
           description: selectedRoom.description || "",
+          all_colleges: Boolean(selectedRoom.all_colleges),
+          colleges: selectedRoom.colleges || [],
         });
       } else {
         setForm({
           room_number: generateCode(),
           room_name: "",
           description: "",
+          all_colleges: true,
+          colleges: [],
         });
       }
       setErrors({});
       setCopied(false);
+
+      let active = true;
+      setCollegesLoading(true);
+      setCollegesError("");
+      fetchColleges()
+        .then((availableColleges) => {
+          if (active) setColleges(availableColleges);
+        })
+        .catch((error) => {
+          if (active) setCollegesError(error.message || "Unable to load colleges.");
+        })
+        .finally(() => {
+          if (active) setCollegesLoading(false);
+        });
+      return () => {
+        active = false;
+      };
     }
   }, [open, selectedRoom]);
 
@@ -99,12 +133,16 @@ function RoomForm({ open, handleClose, selectedRoom, onSubmit }) {
     if (!form.description.trim()) {
       newErrors.description = "Room description is required";
     }
+    if (!form.all_colleges && !form.colleges.length) {
+      newErrors.colleges = "Select at least one college";
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleKeyDown = (event) => {
     if (event.key === "Enter") {
+      if (event.target.closest(".MuiAutocomplete-root")) return;
       event.preventDefault();
       handleSubmit();
     }
@@ -121,6 +159,8 @@ function RoomForm({ open, handleClose, selectedRoom, onSubmit }) {
       room_number: form.room_number,
       room_name: form.room_name.trim(),
       description: form.description.trim(),
+      all_colleges: form.all_colleges,
+      colleges: form.colleges,
     });
   };
 
@@ -131,7 +171,14 @@ function RoomForm({ open, handleClose, selectedRoom, onSubmit }) {
       TransitionComponent={Transition}
       onKeyDown={handleKeyDown}
       keepMounted
-      PaperProps={{ sx: { minWidth: "420px", borderRadius: 3 } }}
+      PaperProps={{
+        sx: {
+          width: { xs: "calc(100vw - 32px)", sm: 520 },
+          maxWidth: "100%",
+          maxHeight: "calc(100% - 32px)",
+          borderRadius: 3,
+        },
+      }}
     >
       <DialogTitle sx={{ fontWeight: "bold" }}>
         {isEdit ? "Edit Room" : "Add Room"}
@@ -218,6 +265,70 @@ function RoomForm({ open, handleClose, selectedRoom, onSubmit }) {
             minRows={3}
             inputProps={{ maxLength: 2000 }}
           />
+          <FormControl>
+            <FormLabel id="room-college-audience-label">
+              Which colleges should receive governance announcements and events?
+            </FormLabel>
+            <RadioGroup
+              aria-labelledby="room-college-audience-label"
+              value={form.all_colleges ? "all" : "specific"}
+              onChange={(event) =>
+                setForm((prev) => ({
+                  ...prev,
+                  all_colleges: event.target.value === "all",
+                }))
+              }
+            >
+              <FormControlLabel
+                value="all"
+                control={<Radio />}
+                label="Every college"
+              />
+              <FormControlLabel
+                value="specific"
+                control={<Radio />}
+                label="Specific colleges only"
+              />
+            </RadioGroup>
+            <Typography variant="caption" color="text.secondary">
+              This setting only filters Governor and College Head announcements and events.
+              College-specific posts are shown only to members whose college is
+              selected here. Anyone with the room code can still join.
+            </Typography>
+            {!form.all_colleges && (
+              <>
+                {collegesError && <Alert severity="error">{collegesError}</Alert>}
+                <Autocomplete
+                  multiple
+                  freeSolo
+                  options={colleges}
+                  value={form.colleges}
+                  loading={collegesLoading}
+                  onChange={(_event, value) =>
+                    setForm((prev) => ({ ...prev, colleges: value }))
+                  }
+                  getOptionLabel={(option) => option}
+                  isOptionEqualToValue={(option, value) =>
+                    option.toLocaleLowerCase() === value.toLocaleLowerCase()
+                  }
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Colleges"
+                      placeholder="Type a college and press Enter"
+                      error={Boolean(errors.colleges || collegesError)}
+                      helperText={
+                        errors.colleges ||
+                        (collegesLoading
+                          ? "Loading suggestions…"
+                          : "Select a suggestion or type a college and press Enter. Use the same name as on member profiles.")
+                      }
+                    />
+                  )}
+                />
+              </>
+            )}
+          </FormControl>
         </Stack>
       </DialogContent>
 

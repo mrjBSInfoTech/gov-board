@@ -2,6 +2,7 @@ import React from "react";
 import {
   Alert,
   Button,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -38,11 +39,13 @@ function StudentPromoteDialog({
   error,
   requiresConfirmation = false,
   positionOptions = POSITION_OPTIONS,
+  memberLabel = "Student",
+  saving = false,
 }) {
   return (
     <Dialog
       open={open}
-      onClose={handleClose}
+      onClose={() => !saving && handleClose()}
       TransitionComponent={Transition}
       keepMounted
       PaperProps={{
@@ -52,7 +55,7 @@ function StudentPromoteDialog({
       <DialogTitle sx={{ fontWeight: "bold" }}>
         {requiresConfirmation
           ? "Confirm Promotion Replacement"
-          : "Promote Student"}
+          : `Promote ${memberLabel}`}
       </DialogTitle>
 
       <DialogContent dividers sx={{ display: "grid", gap: 2 }}>
@@ -69,7 +72,7 @@ function StudentPromoteDialog({
         ) : (
           <>
             <Typography>
-              Promote{" "}
+              Promote {memberLabel.toLowerCase()}{" "}
               <strong>
                 {selectedStudent?.first_name} {selectedStudent?.last_name}
               </strong>{" "}
@@ -102,16 +105,27 @@ function StudentPromoteDialog({
       </DialogContent>
 
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={handleClose} color="inherit" variant="outlined">
+        <Button
+          onClick={handleClose}
+          color="inherit"
+          variant="outlined"
+          disabled={saving}
+        >
           Cancel
         </Button>
         <Button
           onClick={onConfirm}
           color="success"
           variant="contained"
-          disabled={!selectedPosition}
+          disabled={!selectedPosition || saving}
         >
-          {requiresConfirmation ? "Confirm Replacement" : "Confirm Promotion"}
+          {saving ? (
+            <CircularProgress size={20} color="inherit" />
+          ) : requiresConfirmation ? (
+            "Confirm Replacement"
+          ) : (
+            "Confirm Promotion"
+          )}
         </Button>
       </DialogActions>
     </Dialog>

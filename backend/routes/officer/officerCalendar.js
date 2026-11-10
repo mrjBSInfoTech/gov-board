@@ -1,7 +1,10 @@
 import express from "express";
 import db from "../../database/db.js";
 import { authenticateOfficer } from "../../middleware/officerAuthMiddleware.js";
-import { getRoomCalendarEventPredicate } from "../../utils/shared/calendarEventScope.js";
+import {
+  getRoomCalendarEventPredicate,
+  getRoomCollegeMemberVisibilityPredicate,
+} from "../../utils/shared/calendarEventScope.js";
 
 const router = express.Router();
 const DATE_TIME_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
@@ -84,10 +87,15 @@ router.get("/", authenticateOfficer, (req, res) => {
               e.created_by, e.date_created, e.date_updated
          FROM room r
          JOIN calendar_event e ON ${getRoomCalendarEventPredicate()}
+         JOIN student s ON s.student_id = ?
         WHERE r.room_id = ?
           AND e.start_at >= CURRENT_DATE
+          AND (
+            e.visibility_scope <> 'college'
+            OR ${getRoomCollegeMemberVisibilityPredicate("e.college")}
+          )
         ORDER BY e.start_at ASC, e.event_id ASC`,
-      [roomId],
+      [getOfficerId(req), roomId],
       (err, results) => {
         if (err) {
           console.error("Calendar events query error:", err);

@@ -33,15 +33,6 @@ export const fetchAnnouncements = async (roomId = null) => {
   }
 };
 
-export const validateRoomCode = async (roomNumber) => {
-  try {
-    const res = await api.get(`/room/validate/${roomNumber}`);
-    return res.data;
-  } catch (error) {
-    handleError(error);
-  }
-};
-
 export const leaveRoom = async (roomId) => {
   try {
     const res = await api.delete("/room", { data: { roomId } });

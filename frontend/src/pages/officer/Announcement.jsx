@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -27,16 +27,20 @@ import AnnouncementForm from "../../components/officer/Announcement/Announcement
 import AnnouncementDelete from "../../components/officer/Announcement/AnnouncementDelete";
 import RoomTabs from "../../components/room/RoomTabs";
 import RoomLeaveDialog from "../../components/room/RoomLeaveDialog";
+import RoomJoinRequestsDialog from "../../components/room/RoomJoinRequestsDialog";
 
 import {
   fetchAnnouncements,
-  validateRoomCode,
   leaveRoom,
   addAnnouncement,
   updateAnnouncement,
   deleteAnnouncement,
 } from "../../api/officer/announcementAPI";
-import { fetchMyRoom, fetchMyRooms } from "../../api/roomAPI";
+import {
+  fetchMyRoom,
+  fetchMyRooms,
+  requestRoomJoin,
+} from "../../api/roomAPI";
 import RoomLevelBar from "../../components/room/RoomLevelBar";
 
 // Slide Transition for Snackbar
@@ -44,7 +48,7 @@ function SlideTransition(props) {
   return <Slide {...props} direction="up" />;
 }
 
-export default function AnnouncementPage() {
+export default function AnnouncementPage({ governancePage = false }) {
   const { roomId: routeRoomId } = useParams();
   const isRoomHub = Boolean(routeRoomId);
   const roomIdFromRoute = Number(routeRoomId);
@@ -83,6 +87,7 @@ export default function AnnouncementPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
   const [leaveLoading, setLeaveLoading] = useState(false);
+  const [joinRequestsOpen, setJoinRequestsOpen] = useState(false);
 
   // Snackbar notification
   const [snackbar, setSnackbar] = useState({
@@ -101,12 +106,12 @@ export default function AnnouncementPage() {
   };
 
   // Fetch announcements list
-  const loadAnnouncements = async (roomId) => {
+  const loadAnnouncements = useCallback(async (roomId) => {
     if (!roomId) return;
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchAnnouncements(roomId);
+      const data = await fetchAnnouncements(roomId, governancePage);
       if (activeRoomId.current === roomId) setAnnouncements(data || []);
     } catch (err) {
       console.error("Error loading announcements:", err);
@@ -116,7 +121,7 @@ export default function AnnouncementPage() {
     } finally {
       if (activeRoomId.current === roomId) setLoading(false);
     }
-  };
+  }, [governancePage]);
 
   useEffect(() => {
     if (
@@ -128,7 +133,7 @@ export default function AnnouncementPage() {
       setAnnouncements([]);
       setLoading(false);
     }
-  }, [joinedRoom, isRoomHub, roomIdFromRoute]);
+  }, [joinedRoom, isRoomHub, roomIdFromRoute, loadAnnouncements]);
 
   useEffect(() => {
     let active = true;
@@ -192,13 +197,9 @@ export default function AnnouncementPage() {
     setRoomLoading(true);
     setError(null);
     try {
-      const room = await validateRoomCode(roomCodeInput.trim());
-      setJoinedRoom(room);
-      setAnnouncements([]);
-      localStorage.setItem("joinedRoom", JSON.stringify(room));
-      setMyRooms(await fetchMyRooms());
-      window.dispatchEvent(new Event("room-membership-updated"));
-      showSnackbar(`Joined room: ${room.room_name}`, "success");
+      const result = await requestRoomJoin(roomCodeInput.trim());
+      setRoomCodeInput("");
+      showSnackbar(result.message, "success");
     } catch (err) {
       setError(err.message || "Invalid room code.");
     } finally {
@@ -220,6 +221,7 @@ export default function AnnouncementPage() {
       setAnnouncements([]);
       setRoomCodeInput("");
       window.dispatchEvent(new Event("room-membership-updated"));
+      if (isRoomHub) navigate("/officer/rooms/main");
       showSnackbar(nextRoom ? `You left the room. Switched to ${nextRoom.room_name}.` : "You left the room.", "success");
     } catch (err) {
       setError(err.message || "Unable to leave room.");
@@ -319,7 +321,7 @@ export default function AnnouncementPage() {
   return (
     <Box sx={{ p: { xs: 2, md: 3 } }}>
       <Helmet titleTemplate="%s - GovBoard">
-        <title>{isRoomHub ? "Hub" : "Announcements"}</title>
+        <title>{governancePage ? "Announcement" : isRoomHub ? "Hub" : "Announcements"}</title>
       </Helmet>
 
       {/* Header section */}
@@ -338,12 +340,16 @@ export default function AnnouncementPage() {
             variant="h4"
             sx={{ fontWeight: "bold", fontSize: { xs: 24, sm: 32 } }}
           >
-            {isRoomHub
+            {governancePage
+              ? `Announcement${hasCurrentRoom ? ` - ${joinedRoom.room_name}` : ""}`
+              : isRoomHub
               ? `Hub${hasCurrentRoom ? ` - ${joinedRoom.room_name}` : ""}`
               : `Announcements${hasCurrentRoom ? ` - ${joinedRoom.room_name}` : ""}`}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {hasCurrentRoom
+            {governancePage && hasCurrentRoom
+              ? `Making announcements for room ${joinedRoom.room_number}`
+              : hasCurrentRoom
               ? canManageAnnouncements
                 ? `Managing announcements for room ${joinedRoom.room_number}`
                 : `Viewing announcements for room ${joinedRoom.room_number} as a student member`
@@ -353,12 +359,43 @@ export default function AnnouncementPage() {
           </Typography>
         </Box>
 
-        {isRoomHub && (
+        {isRoomHub && !governancePage && (
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+            {hasCurrentRoom && (
+              <Button
+                variant="outlined"
+                color="error"
+                onClick={() => setLeaveDialogOpen(true)}
+              >
+                Leave Room
+              </Button>
+            )}
+            {hasCurrentRoom && canManageAnnouncements && (
+              <Button
+                variant="outlined"
+                onClick={() => setJoinRequestsOpen(true)}
+              >
+                Join Request
+              </Button>
+            )}
+            <Button
+              variant="outlined"
+              onClick={() => navigate("/officer/rooms/main")}
+            >
+              All Rooms
+            </Button>
+          </Box>
+        )}
+
+        {governancePage && hasCurrentRoom && canManageAnnouncements && (
           <Button
-            variant="outlined"
-            onClick={() => navigate("/officer/rooms/main")}
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={handleOpenAddForm}
+            sx={{ borderRadius: 2, px: 3, py: 1, fontWeight: "bold", textTransform: "none" }}
           >
-            All Rooms
+            Add Announcement
           </Button>
         )}
 
@@ -397,7 +434,7 @@ export default function AnnouncementPage() {
             >
               <TextField
                 size="small"
-                label="Join another room"
+                label="Request another room"
                 value={roomCodeInput}
                 onChange={(event) => setRoomCodeInput(event.target.value)}
                 disabled={roomLoading}
@@ -441,12 +478,6 @@ export default function AnnouncementPage() {
                 Add Announcement
               </Button>
             )}
-            <RoomLeaveDialog
-              open={leaveDialogOpen}
-              onClose={() => setLeaveDialogOpen(false)}
-              onConfirm={handleLeaveRoom}
-              loading={leaveLoading}
-            />
           </Box>
         )}
       </Box>
@@ -500,14 +531,14 @@ export default function AnnouncementPage() {
               disabled={!roomCodeInput.trim() || roomLoading}
               sx={{ px: 3, fontWeight: "bold", whiteSpace: "nowrap" }}
             >
-              {roomLoading ? "Joining..." : "Join"}
+              {roomLoading ? "Requesting..." : "Request to Join"}
             </Button>
           </Box>
         </Paper>
       )}
 
       {/* Search Bar */}
-      {hasCurrentRoom && !roomContextLoading && (
+      {!governancePage && hasCurrentRoom && !roomContextLoading && (
         <RoomLevelBar
           key={joinedRoom.room_id}
           roomId={joinedRoom.room_id}
@@ -545,16 +576,28 @@ export default function AnnouncementPage() {
 
       {hasCurrentRoom &&
         !roomContextLoading &&
+        !governancePage &&
         (!isRoomHub || Number(joinedRoom.room_id) === roomIdFromRoute) && (
         <Box sx={{ mb: 3 }}>
           <RoomTabs
             key={joinedRoom.room_id}
             announcements={announcements}
             roomId={joinedRoom.room_id}
-            canManageMembers
           />
         </Box>
       )}
+
+      <RoomJoinRequestsDialog
+        open={!governancePage && joinRequestsOpen}
+        onClose={() => setJoinRequestsOpen(false)}
+        roomId={joinedRoom?.room_id}
+      />
+      <RoomLeaveDialog
+        open={!governancePage && leaveDialogOpen}
+        onClose={() => setLeaveDialogOpen(false)}
+        onConfirm={handleLeaveRoom}
+        loading={leaveLoading}
+      />
 
       {/* Error state */}
       {isRoomHub &&
@@ -637,13 +680,21 @@ export default function AnnouncementPage() {
           >
             {filteredAnnouncements.map((announcement) => (
               <Box
-                key={announcement.announcement_id}
+                key={`${announcement.source_type}-${announcement.announcement_id}`}
                 sx={{ width: "100%", maxWidth: 600 }}
               >
                 <AnnouncementCard
                   announcement={announcement}
-                  onEdit={canManageAnnouncements ? handleOpenEditForm : undefined}
-                  onDelete={canManageAnnouncements ? handleOpenDeleteDialog : undefined}
+                  onEdit={
+                    canManageAnnouncements && announcement.source_type !== "governance"
+                      ? handleOpenEditForm
+                      : undefined
+                  }
+                  onDelete={
+                    canManageAnnouncements && announcement.source_type !== "governance"
+                      ? handleOpenDeleteDialog
+                      : undefined
+                  }
                 />
               </Box>
             ))}

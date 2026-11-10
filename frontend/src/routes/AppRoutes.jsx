@@ -108,6 +108,14 @@ export default function AppRoutes() {
                   path="rooms/:roomId/governance/event-scheduler"
                   element={<AdminEventHandler />}
                 />
+                <Route
+                  path="governance/announcement"
+                  element={<AdminRoomGovernanceAnnouncement />}
+                />
+                <Route
+                  path="governance/event-scheduler"
+                  element={<AdminEventHandler />}
+                />
                 <Route path="room" element={<Navigate to="/admin/rooms/main" replace />} />
                 <Route path="room/main" element={<Navigate to="/admin/rooms/main" replace />} />
                 <Route

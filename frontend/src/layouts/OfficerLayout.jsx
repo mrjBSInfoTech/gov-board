@@ -38,6 +38,7 @@ import GavelIcon from "@mui/icons-material/Gavel";
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
 import EventNoteIcon from "@mui/icons-material/EventNote";
+import CampaignIcon from "@mui/icons-material/Campaign";
 import HistoryIcon from "@mui/icons-material/History";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 
@@ -165,6 +166,7 @@ export default function OfficerLayout() {
     budget: <AccountBalanceIcon />,
     funds: <AttachMoneyIcon />,
     "event-handlers": <EventNoteIcon />,
+    announcement: <CampaignIcon />,
     moderate: <GavelIcon />,
   };
   const roomNavigation = rooms.map((room) => {

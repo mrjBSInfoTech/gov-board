@@ -4,6 +4,7 @@ import db from "../../database/db.js";
 import { authenticateAdmin } from "../../middleware/adminAuthMiddleware.js";
 import {
   getAdminCollegeFilter,
+  getAdminRoomCollegeFilter,
   resolveAdminCollege,
   PRIMARY_ADMIN_ID,
 } from "../../utils/shared/adminScope.js";
@@ -318,7 +319,7 @@ router.post("/:id/demote", authenticateAdmin, async (req, res) => {
     const connection = db.promise();
     await connection.beginTransaction();
     const collegeFilter = getAdminCollegeFilter(req, "s.college");
-    const roomFilter = roomId ? getAdminCollegeFilter(req, "r.college") : null;
+    const roomFilter = roomId ? getAdminRoomCollegeFilter(req, "r.college") : null;
 
     const [officerRows] = await connection.query(
       `SELECT s.student_id, s.first_name, s.last_name,

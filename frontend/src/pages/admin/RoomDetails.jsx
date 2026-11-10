@@ -14,6 +14,7 @@ import CampaignIcon from "@mui/icons-material/Campaign";
 import { fetchRoom, fetchRoomAnnouncements } from "../../api/admin/roomAPI";
 import AnnouncementCard from "../../components/officer/Announcement/AnnouncementCard";
 import RoomTabs from "../../components/room/RoomTabs";
+import RoomJoinRequestsDialog from "../../components/room/RoomJoinRequestsDialog";
 
 export default function RoomDetails() {
   const { roomId } = useParams();
@@ -22,6 +23,7 @@ export default function RoomDetails() {
   const [announcements, setAnnouncements] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [joinRequestsOpen, setJoinRequestsOpen] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -47,13 +49,37 @@ export default function RoomDetails() {
         <title>{room?.room_name || "Room"}</title>
       </Helmet>
 
-      <Button
-        startIcon={<ArrowBackIcon />}
-        onClick={() => navigate("/admin/rooms/main")}
-        sx={{ mb: 2 }}
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 1,
+          mb: 2,
+        }}
       >
-        Back to rooms
-      </Button>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate("/admin/rooms/main")}
+        >
+          Back to rooms
+        </Button>
+        {room && (
+          <Button
+            variant="outlined"
+            onClick={() => setJoinRequestsOpen(true)}
+          >
+            Join Request
+          </Button>
+        )}
+      </Box>
+
+      <RoomJoinRequestsDialog
+        open={joinRequestsOpen}
+        onClose={() => setJoinRequestsOpen(false)}
+        roomId={room?.room_id}
+      />
 
       {error ? (
         <Alert severity="error">{error}</Alert>
@@ -123,7 +149,7 @@ export default function RoomDetails() {
             >
               {announcements.map((announcement) => (
                 <Box
-                  key={announcement.announcement_id}
+                  key={`${announcement.source_type || "room"}-${announcement.announcement_id}`}
                   sx={{ width: "100%", maxWidth: 600 }}
                 >
                   <AnnouncementCard announcement={announcement} />

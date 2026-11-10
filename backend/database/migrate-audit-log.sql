@@ -8,12 +8,15 @@ CREATE TABLE IF NOT EXISTS `audit_logs` (
   `role` varchar(50) NOT NULL,
   `status` varchar(30) NOT NULL,
   `information` text DEFAULT NULL,
+  `room_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`audit_id`),
   KEY `idx_audit_logs_datetime` (`datetime`, `audit_id`),
-  KEY `idx_audit_logs_actor` (`role`, `actor`, `datetime`)
+  KEY `idx_audit_logs_actor` (`role`, `actor`, `datetime`),
+  KEY `idx_audit_logs_room` (`room_id`, `datetime`, `audit_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Student and officer actors store their student number; admin actors store
 -- their username. Information contains messages such as 'Student logged in'.
 -- Section access is enforced by the officer audit endpoint, not this table.
 -- No account foreign key: deleting an account must not erase audit history.
+-- Existing audit_logs tables need migrate-room-audit-log.sql to add room_id.

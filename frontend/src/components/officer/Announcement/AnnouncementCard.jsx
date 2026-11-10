@@ -1,21 +1,18 @@
-import React, { useState } from "react";
 import { Card, Typography, IconButton, Box, Tooltip, Link as MuiLink } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import LaunchIcon from "@mui/icons-material/Launch";
 import { API_BASE_URL } from "../../../api/apiBaseURL";
-
-const IMAGE_BASE_URL = `${API_BASE_URL}/uploads/officer/uploadAnnouncement`;
+import { getAnnouncementImages } from "../../../utils/announcementImages";
 
 function AnnouncementCard({ announcement, onEdit, onDelete }) {
-  const [imageError, setImageError] = useState(false);
-
   if (!announcement) return null;
 
-  const imageUrl =
-    announcement.image && !imageError
-      ? `${IMAGE_BASE_URL}/${announcement.image}`
-      : null;
+  const imageNames = getAnnouncementImages(announcement);
+  const imageBaseUrl =
+    announcement.source_type === "governance"
+      ? `${API_BASE_URL}/uploads/admin/governanceAnnouncement`
+      : `${API_BASE_URL}/uploads/officer/uploadAnnouncement`;
 
   const formatDate = (dateString) => {
     if (!dateString) return "";
@@ -118,7 +115,7 @@ function AnnouncementCard({ announcement, onEdit, onDelete }) {
             fontSize: "1rem",
             lineHeight: 1.65,
             fontWeight: 500,
-            mb: imageUrl ? 3 : announcement.link ? 2 : 0,
+            mb: imageNames.length ? 3 : announcement.link ? 2 : 0,
           }}
         >
           {announcement.announcement_body}
@@ -146,7 +143,7 @@ function AnnouncementCard({ announcement, onEdit, onDelete }) {
               color: "primary.main",
               fontWeight: 600,
               fontSize: "0.875rem",
-              mb: imageUrl ? 3 : 0,
+              mb: imageNames.length ? 3 : 0,
               transition: "all 0.2s",
               wordBreak: "break-all",
               "&:hover": {
@@ -159,21 +156,34 @@ function AnnouncementCard({ announcement, onEdit, onDelete }) {
         )}
 
         {/* Image */}
-        {imageUrl && (
-          <Box sx={{ width: "100%", mt: 1 }}>
-            <Box
-              component="img"
-              src={imageUrl}
-              alt="Announcement Attachment"
-              onError={() => setImageError(true)}
-              sx={{
-                width: "100%",
-                maxHeight: 480,
-                objectFit: "cover",
-                borderRadius: 3,
-                boxShadow: "0 4px 12px rgba(3, 10, 15, 0.18)",
-              }}
-            />
+        {imageNames.length > 0 && (
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+              gap: 1.5,
+              mt: 1,
+            }}
+          >
+            {imageNames.map((image) => (
+              <Box
+                key={image}
+                component="img"
+                src={`${imageBaseUrl}/${encodeURIComponent(image)}`}
+                alt="Announcement attachment"
+                onError={(event) => {
+                  event.currentTarget.style.display = "none";
+                }}
+                sx={{
+                  width: "100%",
+                  maxHeight: 480,
+                  minHeight: 120,
+                  objectFit: "cover",
+                  borderRadius: 3,
+                  boxShadow: "0 4px 12px rgba(3, 10, 15, 0.18)",
+                }}
+              />
+            ))}
           </Box>
         )}
       </Box>

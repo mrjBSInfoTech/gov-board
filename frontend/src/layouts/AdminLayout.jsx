@@ -203,26 +203,25 @@ export default function AdminLayout() {
               title: "Hub",
               icon: <HomeWorkIcon />,
             },
-            {
-              segment: "governance",
-              title: "Governance",
-              navigationKey: `room-${room.room_id}-governance`,
-              icon: <AccountBalanceIcon />,
-              children: [
-                {
-                  segment: "announcement",
-                  title: "Announcement",
-                  icon: <CampaignIcon />,
-                },
-                {
-                  segment: "event-scheduler",
-                  title: "Event Scheduler",
-                  icon: <EventNoteIcon />,
-                },
-              ],
-            },
           ],
         })),
+      ],
+    },
+    {
+      segment: "governance",
+      title: "Governance",
+      icon: <AccountBalanceIcon />,
+      children: [
+        {
+          segment: "announcement",
+          title: "Announcement",
+          icon: <CampaignIcon />,
+        },
+        {
+          segment: "event-scheduler",
+          title: "Event Scheduler",
+          icon: <EventNoteIcon />,
+        },
       ],
     },
     {

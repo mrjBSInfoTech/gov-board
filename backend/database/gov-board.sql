@@ -57,6 +57,7 @@ CREATE TABLE `announcement` (
   `announcement_body` text NOT NULL,
   `link` varchar(255) DEFAULT NULL,
   `image` varchar(255) DEFAULT NULL,
+  `images` JSON DEFAULT NULL,
   `date_created` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -93,7 +94,29 @@ CREATE TABLE `room` (
   `room_name` varchar(100) NOT NULL,
   `description` text NOT NULL,
   `college` varchar(150) DEFAULT NULL,
+  `all_colleges` tinyint(1) NOT NULL DEFAULT 0,
   `date_created` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `room_college` (
+  `room_id` int(11) NOT NULL,
+  `college` varchar(150) NOT NULL,
+  PRIMARY KEY (`room_id`, `college`),
+  KEY `idx_room_college_college` (`college`, `room_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `governance_announcement` (
+  `announcement_id` int(11) NOT NULL AUTO_INCREMENT,
+  `visibility_scope` enum('college','global') NOT NULL,
+  `college` varchar(150) DEFAULT NULL,
+  `announcement_body` text NOT NULL,
+  `link` varchar(255) DEFAULT NULL,
+  `images` JSON DEFAULT NULL,
+  `created_by_admin` int(11) NOT NULL,
+  `date_created` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`announcement_id`),
+  KEY `idx_governance_announcement_visibility`
+    (`visibility_scope`, `college`, `date_created`, `announcement_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -103,6 +126,15 @@ CREATE TABLE `room` (
 INSERT INTO `room` (`room_id`, `room_number`, `room_name`, `description`, `college`, `date_created`) VALUES
 (1, 'bly-ogts', 'John Doe\'s Room', '', NULL, '2026-09-10 22:49:57'),
 (2, 'ncl-wh4x', 'Jane Doe\'s Room', '', NULL, '2026-09-10 23:23:56');
+
+UPDATE `room`
+   SET `all_colleges` = 1
+ WHERE `college` IS NULL OR TRIM(`college`) = '';
+
+INSERT INTO `room_college` (`room_id`, `college`)
+SELECT `room_id`, `college`
+  FROM `room`
+ WHERE `college` IS NOT NULL AND TRIM(`college`) <> '';
 
 -- --------------------------------------------------------
 
@@ -130,7 +162,22 @@ CREATE TABLE `room_member` (
   `member_type` enum('officer','student') NOT NULL,
   `member_id` int(11) NOT NULL,
   `position` varchar(100) NOT NULL DEFAULT 'Student',
+  `muted_until` datetime DEFAULT NULL,
   `date_joined` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `room_join_request` (
+  `join_request_id` int(11) NOT NULL AUTO_INCREMENT,
+  `room_id` int(11) NOT NULL,
+  `member_id` int(11) NOT NULL,
+  `status` enum('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+  `requested_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `decided_by_type` enum('admin','officer') DEFAULT NULL,
+  `decided_by_id` int(11) DEFAULT NULL,
+  `decided_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`join_request_id`),
+  UNIQUE KEY `uq_room_join_request_member` (`room_id`, `member_id`),
+  KEY `idx_room_join_request_pending` (`room_id`, `status`, `requested_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Calendar events created by officers in the Event Handlers workspace.
@@ -315,6 +362,10 @@ ALTER TABLE `room_message`
 -- Constraints for table `room_member`
 ALTER TABLE `room_member`
   ADD CONSTRAINT `room_member_room_fk` FOREIGN KEY (`room_id`) REFERENCES `room` (`room_id`) ON DELETE CASCADE;
+
+ALTER TABLE `room_college`
+  ADD CONSTRAINT `room_college_room_fk`
+    FOREIGN KEY (`room_id`) REFERENCES `room` (`room_id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `student`

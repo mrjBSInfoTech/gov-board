@@ -46,6 +46,16 @@ export const fetchRooms = async () => {
   }
 };
 
+// GET colleges available for room audience targeting
+export const fetchColleges = async () => {
+  try {
+    const res = await api.get("/rooms/colleges");
+    return res.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+
 // GET one room
 export const fetchRoom = async (id) => {
   try {

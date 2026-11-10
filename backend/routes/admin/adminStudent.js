@@ -4,6 +4,7 @@ import db from "../../database/db.js";
 import { authenticateAdmin } from "../../middleware/adminAuthMiddleware.js";
 import {
   getAdminCollegeFilter,
+  getAdminRoomCollegeFilter,
   resolveAdminCollege,
 } from "../../utils/shared/adminScope.js";
 import {
@@ -184,7 +185,7 @@ router.post("/:id/promote", authenticateAdmin, async (req, res) => {
 
     const connection = db.promise();
     const studentFilter = getAdminCollegeFilter(req, "s.college");
-    const roomFilter = getAdminCollegeFilter(req, "r.college");
+    const roomFilter = getAdminRoomCollegeFilter(req, "r.college");
     try {
       await connection.beginTransaction();
       const [[student]] = await connection.query(
