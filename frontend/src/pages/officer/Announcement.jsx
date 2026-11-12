@@ -42,13 +42,14 @@ import {
   requestRoomJoin,
 } from "../../api/roomAPI";
 import RoomLevelBar from "../../components/room/RoomLevelBar";
+import { canManageGovernanceSection } from "../../utils/governanceAccess";
 
 // Slide Transition for Snackbar
 function SlideTransition(props) {
   return <Slide {...props} direction="up" />;
 }
 
-export default function AnnouncementPage({ governancePage = false }) {
+export default function AnnouncementPage({ governancePage = false, readOnly = false }) {
   const { roomId: routeRoomId } = useParams();
   const isRoomHub = Boolean(routeRoomId);
   const roomIdFromRoute = Number(routeRoomId);
@@ -73,7 +74,10 @@ export default function AnnouncementPage({ governancePage = false }) {
       (!isRoomHub || Number(joinedRoom.room_id) === roomIdFromRoute),
   );
   const [myRooms, setMyRooms] = useState([]);
-  const canManageAnnouncements = joinedRoom?.member_type === "officer";
+  const canManageAnnouncements =
+    joinedRoom?.member_type === "officer" &&
+    canManageGovernanceSection(joinedRoom.position, "announcement") &&
+    !readOnly;
   const [roomCodeInput, setRoomCodeInput] = useState("");
   const [roomLoading, setRoomLoading] = useState(false);
 
@@ -583,6 +587,8 @@ export default function AnnouncementPage({ governancePage = false }) {
             key={joinedRoom.room_id}
             announcements={announcements}
             roomId={joinedRoom.room_id}
+            canSubmitBudgetContributions
+            budgetContributorType="officer"
           />
         </Box>
       )}

@@ -38,5 +38,23 @@ export const deleteFund = (fundId) => request(() => api.delete(`/${fundId}`));
 export const fetchFundContributions = (fundId) =>
   request(() => api.get(`/${fundId}/contributions`));
 
+export const fetchRoomFundContributions = (roomId) =>
+  request(() => api.get("/contributions", { params: { roomId } }));
+
+export const fetchContributionProof = (fundId, contributionId) =>
+  request(() =>
+    api.get(`/${fundId}/contributions/${contributionId}/proof`, {
+      responseType: "blob",
+    }),
+  );
+
+export const reviewFundContribution = (fundId, contributionId, decision, review_remarks) =>
+  request(() =>
+    api.patch(`/${fundId}/contributions/${contributionId}/review`, {
+      decision,
+      review_remarks,
+    }),
+  );
+
 export const addFundContribution = (fundId, contributionData) =>
   request(() => api.post(`/${fundId}/contributions`, contributionData));

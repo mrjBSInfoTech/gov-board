@@ -2,6 +2,7 @@ import { Box, Button } from "@mui/material";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
+import AccountBalanceWalletOutlinedIcon from "@mui/icons-material/AccountBalanceWalletOutlined";
 
 export default function RoomToolsLauncher({
   messageCount,
@@ -9,6 +10,8 @@ export default function RoomToolsLauncher({
   onOpenChatFiles,
   onOpenMembers,
   onOpenCalendar,
+  onOpenBudget,
+  canSubmitBudgetContributions = false,
 }) {
   const buttonStyles = {
     borderRadius: 2,
@@ -43,6 +46,16 @@ export default function RoomToolsLauncher({
       >
         Calendar
       </Button>
+      {canSubmitBudgetContributions && (
+        <Button
+          variant="outlined"
+          startIcon={<AccountBalanceWalletOutlinedIcon />}
+          onClick={onOpenBudget}
+          sx={buttonStyles}
+        >
+          Budget plans
+        </Button>
+      )}
     </Box>
   );
 }

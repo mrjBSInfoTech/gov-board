@@ -101,6 +101,7 @@ export default function Calendar({
   title = "Event Scheduler",
   description = "Plan events, assignments, reminders, and important dates.",
   scopeDescription = "",
+  readOnly = false,
 }) {
   const {
     createCalendarEvent: createEvent,
@@ -274,9 +275,11 @@ export default function Calendar({
             </Typography>
           )}
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => openCreateDialog()}>
-          Add event
-        </Button>
+        {!readOnly && (
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => openCreateDialog()}>
+            Add event
+          </Button>
+        )}
       </Stack>
 
       {errorMessage && (
@@ -491,7 +494,7 @@ export default function Calendar({
                       )}
                     </Box>
                     <Stack direction="row" alignSelf={{ xs: "flex-start", sm: "center" }}>
-                      {canManageEvent(event) && (
+                      {!readOnly && canManageEvent(event) && (
                         <>
                           <IconButton
                             aria-label="Edit event"
@@ -520,20 +523,22 @@ export default function Calendar({
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEventListOpen(false)}>Close</Button>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => {
-              setEventListOpen(false);
-              openCreateDialog(selectedDate);
-            }}
-          >
-            Add event
-          </Button>
+          {!readOnly && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => {
+                setEventListOpen(false);
+                openCreateDialog(selectedDate);
+              }}
+            >
+              Add event
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 
-      <Dialog open={dialogOpen} onClose={() => !saving && setDialogOpen(false)} fullWidth maxWidth="sm">
+      {!readOnly && <Dialog open={dialogOpen} onClose={() => !saving && setDialogOpen(false)} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={handleSubmit}>
           <DialogTitle>{editingEvent ? "Edit event" : "Add event"}</DialogTitle>
           <DialogContent dividers>
@@ -598,7 +603,7 @@ export default function Calendar({
             </Button>
           </DialogActions>
         </Box>
-      </Dialog>
+      </Dialog>}
     </Box>
   );
 }

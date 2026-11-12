@@ -40,6 +40,7 @@ import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
 import EventNoteIcon from "@mui/icons-material/EventNote";
 import CampaignIcon from "@mui/icons-material/Campaign";
 import HistoryIcon from "@mui/icons-material/History";
+import AssessmentIcon from "@mui/icons-material/Assessment";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 
 const Transition = React.forwardRef(function Transition(props, ref) {
@@ -168,6 +169,7 @@ export default function OfficerLayout() {
     "event-handlers": <EventNoteIcon />,
     announcement: <CampaignIcon />,
     moderate: <GavelIcon />,
+    reports: <AssessmentIcon />,
   };
   const roomNavigation = rooms.map((room) => {
     const governanceAccess =

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   Box,
@@ -16,16 +16,12 @@ import {
   TextField,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
-import { DatePicker, LocalizationProvider } from "@mui/x-date-pickers";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import dayjs from "dayjs";
 
 const emptyBudget = {
   budget_name: "",
   category: "Other",
   planned_amount: "",
-  spent_amount: "0",
-  budget_period: "",
+  deadline: "",
   description: "",
   status: "Planned",
 };
@@ -40,6 +36,7 @@ export default function BudgetForm({
   open,
   handleClose,
   selectedBudget,
+  memberCount = 0,
   onSubmit,
   loading = false,
 }) {
@@ -55,8 +52,7 @@ export default function BudgetForm({
             budget_name: selectedBudget.budget_name || "",
             category: selectedBudget.category || "Other",
             planned_amount: String(selectedBudget.planned_amount ?? ""),
-            spent_amount: String(selectedBudget.spent_amount ?? "0"),
-            budget_period: selectedBudget.budget_period || "",
+            deadline: selectedBudget.deadline || "",
             description: selectedBudget.description || "",
             status: selectedBudget.status || "Planned",
           }
@@ -74,12 +70,8 @@ export default function BudgetForm({
   const submit = async (event) => {
     event.preventDefault();
     const name = formData.budget_name.trim();
-    if (
-      !name ||
-      Number(formData.planned_amount) < 0 ||
-      Number(formData.spent_amount) < 0
-    ) {
-      setError("Enter a budget name and valid planned and spent amounts.");
+    if (!name || Number(formData.planned_amount) <= 0) {
+      setError("Enter a budget name and an amount needed greater than zero.");
       return;
     }
     try {
@@ -87,7 +79,6 @@ export default function BudgetForm({
         ...formData,
         budget_name: name,
         planned_amount: Number(formData.planned_amount).toFixed(2),
-        spent_amount: Number(formData.spent_amount).toFixed(2),
       });
       handleClose();
     } catch (submitError) {
@@ -96,16 +87,15 @@ export default function BudgetForm({
   };
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDayjs}>
-      <Dialog
-        open={open}
-        onClose={loading ? undefined : handleClose}
-        TransitionComponent={Transition}
-        fullWidth
-        maxWidth="sm"
-        PaperProps={{ sx: { borderRadius: 3 } }}
-        aria-labelledby="budget-form-title"
-      >
+    <Dialog
+      open={open}
+      onClose={loading ? undefined : handleClose}
+      TransitionComponent={Transition}
+      fullWidth
+      maxWidth="sm"
+      PaperProps={{ sx: { borderRadius: 3 } }}
+      aria-labelledby="budget-form-title"
+    >
         <DialogTitle
           id="budget-form-title"
           sx={{
@@ -116,12 +106,13 @@ export default function BudgetForm({
             alignItems: "center",
           }}
         >
-          {isEdit ? "Edit Budget Item" : "Add Budget Item"}
+          {isEdit ? "Edit Budget Plan" : "Add Budget Plan"}
           <IconButton
             onClick={handleClose}
             size="small"
             disabled={loading}
             aria-label="Close budget form"
+            sx={{ minWidth: 44, minHeight: 44 }}
           >
             <CloseIcon />
           </IconButton>
@@ -179,7 +170,7 @@ export default function BudgetForm({
                   ))}
                 </TextField>
                 <TextField
-                  label="Planned Amount"
+                  label="Amount Needed"
                   name="planned_amount"
                   value={formData.planned_amount}
                   onChange={change}
@@ -195,46 +186,49 @@ export default function BudgetForm({
                   }}
                 />
                 <TextField
-                  label="Amount Spent"
-                  name="spent_amount"
-                  value={formData.spent_amount}
-                  onChange={change}
-                  type="number"
-                  required
-                  fullWidth
-                  disabled={loading}
-                  inputProps={{ min: 0, step: "0.01" }}
+                  label="Suggested amount per member"
+                  value={
+                    memberCount > 0 && Number(formData.planned_amount) > 0
+                      ?                       Math.max(
+                        0.01,
+                        Math.floor(
+                          Math.round(Number(formData.planned_amount) * 100) /
+                            memberCount,
+                        ) / 100,
+                      ).toFixed(2)
+                      : ""
+                  }
+                  helperText={
+                    memberCount
+                      ? `Based on ${memberCount} room member${memberCount === 1 ? "" : "s"}; calculated automatically.`
+                      : "Room members are still loading."
+                  }
                   InputProps={{
+                    readOnly: true,
                     startAdornment: (
                       <InputAdornment position="start">₱</InputAdornment>
                     ),
                   }}
+                  fullWidth
+                  disabled
                 />
-                <DatePicker
-                  label="Budget Date"
-                  value={
-                    formData.budget_period
-                      ? dayjs(formData.budget_period)
-                      : null
-                  }
-                  onChange={(date) => {
-                    setFormData((current) => ({
-                      ...current,
-                      budget_period: date?.isValid()
-                        ? date.format("YYYY-MM-DD")
-                        : "",
-                    }));
-                    setError("");
-                  }}
+                <TextField
+                  label="Deadline (Optional)"
+                  name="deadline"
+                  value={formData.deadline}
+                  onChange={change}
+                  type="date"
+                  fullWidth
                   disabled={loading}
-                  slotProps={{ textField: { fullWidth: true } }}
+                  InputLabelProps={{ shrink: true }}
                 />
               </Box>
               <TextField
-                label="Notes (Optional)"
+                label="Description (Optional)"
                 name="description"
                 value={formData.description}
                 onChange={change}
+                placeholder="What is this budget for?"
                 multiline
                 rows={3}
                 fullWidth
@@ -260,11 +254,10 @@ export default function BudgetForm({
               }
               sx={{ fontWeight: "bold", px: 3 }}
             >
-              {loading ? "Saving..." : isEdit ? "Save Changes" : "Add Budget"}
+              {loading ? "Saving..." : isEdit ? "Save Changes" : "Create Budget Plan"}
             </Button>
           </DialogActions>
         </Box>
-      </Dialog>
-    </LocalizationProvider>
+    </Dialog>
   );
 }

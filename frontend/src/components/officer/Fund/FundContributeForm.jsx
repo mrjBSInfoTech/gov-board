@@ -108,6 +108,11 @@ export default function FundContributeForm({
     });
   }, [students, contributionByStudent, fund]);
 
+  const fundRemaining = Math.max(
+    0,
+    Number(fund?.target_amount || 0) - Number(fund?.total_contributed || 0),
+  );
+
   useEffect(() => {
     if (!open || !fund?.fund_id) return;
 
@@ -121,7 +126,7 @@ export default function FundContributeForm({
       .then((records) => setContributions(records || []))
       .catch((loadError) =>
         setError(
-          loadError.message || "Unable to load student contribution status.",
+          loadError.message || "Unable to load member contribution status.",
         ),
       )
       .finally(() => setLoading(false));
@@ -136,11 +141,11 @@ export default function FundContributeForm({
       studentRows.forEach((student) => {
         if (!nextValues[student.member_id]) {
           nextValues[student.member_id] = {
-            amount: student.remaining.toFixed(2),
-            payment_date:
-              student.status === "Paid" && student.lastPaymentDate
-                ? student.lastPaymentDate
-                : getToday(),
+            amount: Math.min(
+              student.remaining || (fund?.budget_id ? fundRemaining : 0),
+              fundRemaining || student.remaining,
+            ).toFixed(2),
+            payment_date: getToday(),
             payment_method: student.lastPaymentMethod,
           };
         }
@@ -148,10 +153,12 @@ export default function FundContributeForm({
 
       return nextValues;
     });
-  }, [open, studentRows]);
+  }, [open, studentRows, fund, fundRemaining]);
 
   const payableRows = studentRows.filter(
-    (student) => student.status !== "Paid",
+    (student) =>
+      student.status !== "Paid" ||
+      Boolean(fund?.budget_id && fundRemaining > 0),
   );
   const allSelected =
     payableRows.length > 0 &&
@@ -188,10 +195,11 @@ export default function FundContributeForm({
     event.preventDefault();
 
     if (!selectedIds.length) {
-      setError("Select at least one student.");
+      setError("Select at least one room member.");
       return;
     }
 
+    let selectedAmount = 0;
     for (const studentId of selectedIds) {
       const values = rowValues[studentId];
       const student = studentRows.find(
@@ -200,19 +208,25 @@ export default function FundContributeForm({
       const amount = String(values?.amount || "").trim();
 
       if (!/^\d+(\.\d{1,2})?$/.test(amount) || Number(amount) <= 0) {
-        setError("Each selected student must have a valid amount.");
+        setError("Each selected member must have a valid amount.");
         return;
       }
 
-      if (student && Number(amount) > student.remaining) {
+      if (fund?.budget_id && Number(amount) > fundRemaining - selectedAmount) {
+        setError(`Selected payments cannot exceed the remaining plan balance of ${formatMoney(fundRemaining - selectedAmount)}.`);
+        return;
+      }
+
+      if (!fund?.budget_id && student && Number(amount) > student.remaining) {
         setError(
           `${student.first_name} ${student.last_name}'s amount cannot exceed ${formatMoney(student.remaining)}.`,
         );
         return;
       }
+      selectedAmount += Number(amount);
 
       if (!/^\d{4}-\d{2}-\d{2}$/.test(values?.payment_date || "")) {
-        setError("Each selected student must have a valid payment date.");
+        setError("Each selected member must have a valid payment date.");
         return;
       }
 
@@ -227,8 +241,7 @@ export default function FundContributeForm({
     let recordedCount = 0;
 
     try {
-      // Submit sequentially so the server can recalculate the fund balance
-      // after every recorded student payment.
+      // Submit sequentially so the server can recheck the balance for each member.
       for (const studentId of selectedIds) {
         const values = rowValues[studentId];
 
@@ -286,6 +299,7 @@ export default function FundContributeForm({
           size="small"
           disabled={saving}
           aria-label="Close contribution form"
+          sx={{ minWidth: 44, minHeight: 44 }}
         >
           <CloseIcon />
         </IconButton>
@@ -298,10 +312,10 @@ export default function FundContributeForm({
 
             <Box>
               <Typography variant="body2" color="text.secondary">
-                Select students and enter the details of their payment.
+                Select room members and enter the details of their payment.
               </Typography>
               <Typography variant="body2" sx={{ mt: 0.5, fontWeight: 700 }}>
-                Required per student: {formatMoney(fund?.contribution_amount)}
+                Suggested per member: {formatMoney(fund?.contribution_amount)}
               </Typography>
             </Box>
 
@@ -325,7 +339,7 @@ export default function FundContributeForm({
                 },
               }}
             >
-              <Table stickyHeader size="small" aria-label="Student contributions">
+              <Table stickyHeader size="small" aria-label="Member contributions">
                 <TableHead>
                   <TableRow>
                     <TableCell padding="checkbox">
@@ -335,11 +349,11 @@ export default function FundContributeForm({
                         onChange={toggleAll}
                         disabled={saving || !payableRows.length}
                         inputProps={{
-                          "aria-label": "Select all unpaid students",
+                          "aria-label": "Select all members with a balance",
                         }}
                       />
                     </TableCell>
-                    <TableCell>Student</TableCell>
+                    <TableCell>Member</TableCell>
                     <TableCell sx={{ minWidth: 190 }}>Contribution</TableCell>
                     <TableCell sx={{ minWidth: 130 }}>Amount</TableCell>
                     <TableCell sx={{ minWidth: 150 }}>Date paid</TableCell>
@@ -358,7 +372,7 @@ export default function FundContributeForm({
                     <TableRow>
                       <TableCell colSpan={6} align="center" sx={{ py: 5 }}>
                         <Typography color="text.secondary">
-                          No students are available in this room.
+                          No room members are available.
                         </Typography>
                       </TableCell>
                     </TableRow>
@@ -366,6 +380,8 @@ export default function FundContributeForm({
                     studentRows.map((student) => {
                       const selected = selectedIds.includes(student.member_id);
                       const paid = student.status === "Paid";
+                      const remainderPayment =
+                        paid && Boolean(fund?.budget_id && fundRemaining > 0);
                       const values = rowValues[student.member_id] || {};
 
                       return (
@@ -386,7 +402,10 @@ export default function FundContributeForm({
                             <Checkbox
                               checked={selected}
                               onChange={() => toggleStudent(student.member_id)}
-                              disabled={saving || paid}
+                              disabled={
+                                saving ||
+                                (paid && !remainderPayment)
+                              }
                               inputProps={{
                                 "aria-label": `Select ${student.first_name} ${student.last_name}`,
                               }}
@@ -398,7 +417,9 @@ export default function FundContributeForm({
                               {student.first_name} {student.last_name}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
-                              {student.section || "No section"}
+                              {student.member_type === "officer"
+                                ? student.position || "Officer"
+                                : student.section || "Student"}
                             </Typography>
                           </TableCell>
 
@@ -453,10 +474,12 @@ export default function FundContributeForm({
                                   event.target.value,
                                 )
                               }
-                              disabled={!selected || saving || paid}
+                              disabled={!selected || saving || (paid && !remainderPayment)}
                               inputProps={{
                                 min: "0.01",
-                                max: student.remaining,
+                                max: fund?.budget_id
+                                  ? fundRemaining
+                                  : student.remaining,
                                 step: "0.01",
                               }}
                             />
@@ -484,7 +507,7 @@ export default function FundContributeForm({
                                   event.target.value,
                                 )
                               }
-                              disabled={!selected || saving || paid}
+                              disabled={!selected || saving || (paid && !remainderPayment)}
                             >
                               {paymentMethods.map((method) => (
                                 <MenuItem key={method} value={method}>
@@ -505,7 +528,7 @@ export default function FundContributeForm({
               fullWidth
               multiline
               rows={2}
-              label="Remarks for selected students (Optional)"
+              label="Remarks for selected members (Optional)"
               value={remarks}
               onChange={(event) => setRemarks(event.target.value)}
               disabled={saving}

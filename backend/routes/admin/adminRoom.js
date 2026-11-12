@@ -262,6 +262,8 @@ router.post("/", authenticateAdmin, async (req, res) => {
     await saveRoomCollegeTargets(connection, result.insertId, roomAudience);
     await connection.commit();
     transactionStarted = false;
+    req.auditTargetId = result.insertId;
+    req.auditRoomId = result.insertId;
     res.status(201).json({
       message: "Room created",
       room_id: result.insertId,

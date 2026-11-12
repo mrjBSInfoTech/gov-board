@@ -8,6 +8,7 @@ import RoomChatFilesDialog from "./RoomChatFilesDialog";
 import RoomMembersDialog from "./RoomMembersDialog";
 import RoomToolsLauncher from "./RoomToolsLauncher";
 import CalendarEventsDialog from "./CalendarEventsDialog";
+import RoomBudgetContributionsDialog from "./RoomBudgetContributionsDialog";
 import StudentPromoteDialog from "../admin/Student/StudentPromoteDialog";
 import AccountDemote from "../admin/Account/AccountDemote";
 import { promoteStudent } from "../../api/admin/studentAPI";
@@ -43,10 +44,13 @@ export default function RoomTabs({
   announcements,
   roomId,
   canManageMembers = false,
+  canSubmitBudgetContributions = false,
+  budgetContributorType = "student",
 }) {
   const [chatFilesOpen, setChatFilesOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [budgetOpen, setBudgetOpen] = useState(false);
   const [tab, setTab] = useState(0);
   const [messages, setMessages] = useState([]);
   const [members, setMembers] = useState([]);
@@ -295,6 +299,15 @@ export default function RoomTabs({
           setMembersOpen(true);
         }}
         onOpenCalendar={() => setCalendarOpen(true)}
+        onOpenBudget={() => setBudgetOpen(true)}
+        canSubmitBudgetContributions={canSubmitBudgetContributions}
+      />
+
+      <RoomBudgetContributionsDialog
+        open={budgetOpen}
+        onClose={() => setBudgetOpen(false)}
+        roomId={roomId}
+        memberType={budgetContributorType}
       />
 
       <CalendarEventsDialog

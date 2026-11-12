@@ -4,6 +4,7 @@ import multer from "multer";
 import path from "path";
 import { fileURLToPath } from "url";
 import { authenticateOfficer } from "../../middleware/officerAuthMiddleware.js";
+import { requireOfficerGovernanceAccess } from "../../middleware/officerGovernanceAccess.js";
 import { getRoomCollegeMemberVisibilityPredicate } from "../../utils/shared/calendarEventScope.js";
 import { getAnnouncementImages } from "../../utils/shared/announcementImages.js";
 import {
@@ -43,6 +44,13 @@ const uploadAnnouncementImages = (req, res, next) => {
     },
   );
 };
+const requireGovernanceAnnouncementView = (req, res, next) => {
+  if (req.query.roomOnly !== "true") return next();
+  return requireOfficerGovernanceAccess({
+    section: "announcement",
+    getRoomId: (request) => request.query.roomId,
+  })(req, res, next);
+};
 const getUploadedAnnouncementFiles = (req) => [
   ...(req.files?.files || []),
   ...(req.files?.file || []),
@@ -77,6 +85,7 @@ router.get(
   "/",
   authenticateOfficer,
   requireRoomMembership((req) => req.query.roomId, ["student", "officer"]),
+  requireGovernanceAnnouncementView,
   (req, res) => {
     if (req.query.roomOnly === "true") {
       db.query(
@@ -153,7 +162,19 @@ router.delete("/room", authenticateOfficer, (req, res) => {
   );
 });
 
-router.get("/:id", authenticateOfficer, (req, res) => {
+router.get(
+  "/:id",
+  authenticateOfficer,
+  requireOfficerGovernanceAccess({
+    section: "announcement",
+    resource: {
+      table: "announcement",
+      idParam: "id",
+      idColumn: "announcement_id",
+      roomColumn: "room_id",
+    },
+  }),
+  (req, res) => {
   const { id } = req.params;
   const sql = `
     SELECT a.announcement_id, a.room_id, a.announcement_body, a.link,
@@ -171,13 +192,18 @@ router.get("/:id", authenticateOfficer, (req, res) => {
       return res.status(404).json({ error: "Announcement not found" });
     }
     res.json(results[0]);
-  });
+    },
+  );
 });
 
 router.post(
   "/",
   authenticateOfficer,
-  requireRoomMembership((req) => req.query.roomId || req.body?.room_id, ["officer"]),
+  requireOfficerGovernanceAccess({
+    section: "announcement",
+    action: "manage",
+    getRoomId: (req) => req.query.roomId || req.body?.room_id,
+  }),
   uploadAnnouncementImages,
   (req, res) => {
   const { announcement_body, link } = req.body;
@@ -227,7 +253,11 @@ router.post(
 router.put(
   "/:id",
   authenticateOfficer,
-  requireRoomMembership((req) => req.query.roomId || req.body?.room_id, ["officer"]),
+  requireOfficerGovernanceAccess({
+    section: "announcement",
+    action: "manage",
+    getRoomId: (req) => req.query.roomId || req.body?.room_id,
+  }),
   uploadAnnouncementImages,
   (req, res) => {
   const { id } = req.params;
@@ -293,7 +323,11 @@ router.put(
 router.delete(
   "/:id",
   authenticateOfficer,
-  requireRoomMembership((req) => req.query.roomId, ["officer"]),
+  requireOfficerGovernanceAccess({
+    section: "announcement",
+    action: "manage",
+    getRoomId: (req) => req.query.roomId,
+  }),
   (req, res) => {
   const { id } = req.params;
 

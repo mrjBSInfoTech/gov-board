@@ -68,6 +68,12 @@ router.post("/login", (req, res) => {
       user.position === "Super Admin" &&
       Number(user.admin_id) !== PRIMARY_ADMIN_ID
     ) {
+      void logAudit({
+        action: "Login",
+        actor: user.username,
+        status: "Failed",
+        information: "Login rejected: only the primary admin can be a Super Admin",
+      });
       return res.status(403).json({
         message: "Only the primary admin can be a Super Admin.",
       });
@@ -76,6 +82,12 @@ router.post("/login", (req, res) => {
       !["Governor", "College Head", "Super Admin"].includes(user.position) ||
       (user.position !== "Super Admin" && !user.college?.trim())
     ) {
+      void logAudit({
+        action: "Login",
+        actor: user.username,
+        status: "Failed",
+        information: "Login rejected: invalid admin position or missing college assignment",
+      });
       return res.status(403).json({
         message: "Admin account needs a valid position and college assignment.",
       });

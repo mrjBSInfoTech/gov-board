@@ -485,6 +485,8 @@ export default function AnnouncementPage() {
               key={joinedRoom.room_id}
               announcements={announcements}
               roomId={joinedRoom.room_id}
+              canSubmitBudgetContributions
+              budgetContributorType="student"
             />
           </Box>
 

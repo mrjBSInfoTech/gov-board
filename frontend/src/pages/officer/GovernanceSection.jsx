@@ -8,6 +8,7 @@ import EventNoteOutlinedIcon from "@mui/icons-material/EventNoteOutlined";
 import CampaignOutlinedIcon from "@mui/icons-material/CampaignOutlined";
 import HistoryOutlinedIcon from "@mui/icons-material/HistoryOutlined";
 import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
+import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
 import { canAccessGovernanceSection } from "../../utils/governanceAccess";
 import Calendar from "./Calendar";
 import Fund from "./Fund";
@@ -15,7 +16,13 @@ import Audit from "./Audit";
 import Budget from "./Budget";
 import Moderate from "./Moderate";
 import OfficerAnnouncement from "./Announcement";
+import GovernanceReports from "./GovernanceReports";
+import GovernanceReportDownload from "./GovernanceReportDownload";
 import { fetchMyRoom } from "../../api/roomAPI";
+import {
+  canDownloadGovernanceSectionReport,
+  canManageGovernanceSection,
+} from "../../utils/governanceAccess";
 
 const SECTIONS = {
   audit: {
@@ -47,6 +54,11 @@ const SECTIONS = {
     title: "Moderate",
     description: "Review and moderate room activity.",
     icon: GavelOutlinedIcon,
+  },
+  reports: {
+    title: "Reports",
+    description: "Generate a room-scoped governance report.",
+    icon: AssessmentOutlinedIcon,
   },
 };
 
@@ -96,24 +108,36 @@ export default function GovernanceSection() {
   if (!SECTIONS[sectionKey] || !canAccessGovernanceSection(membership.position, sectionKey)) {
     return <Navigate to={`/officer/rooms/${roomId}/hub`} replace />;
   }
+  const readOnly = !canManageGovernanceSection(membership.position, sectionKey);
+  const renderPage = (page) => (
+    <Box key={roomId}>
+      {canDownloadGovernanceSectionReport(membership.position) && (
+        <GovernanceReportDownload roomId={Number(roomId)} section={sectionKey} />
+      )}
+      {page}
+    </Box>
+  );
 
   if (sectionKey === "event-handlers") {
-    return <Calendar key={roomId} roomId={Number(roomId)} />;
+    return renderPage(<Calendar roomId={Number(roomId)} readOnly={readOnly} />);
   }
   if (sectionKey === "budget") {
-    return <Budget key={roomId} roomId={Number(roomId)} />;
+    return renderPage(<Budget roomId={Number(roomId)} readOnly={readOnly} />);
   }
   if (sectionKey === "audit") {
-    return <Audit key={roomId} roomId={Number(roomId)} />;
+    return renderPage(<Audit roomId={Number(roomId)} />);
   }
   if (sectionKey === "funds") {
-    return <Fund key={roomId} roomId={Number(roomId)} />;
+    return renderPage(<Fund roomId={Number(roomId)} readOnly={readOnly} />);
   }
   if (sectionKey === "moderate") {
-    return <Moderate key={roomId} roomId={Number(roomId)} position={membership.position} />;
+    return renderPage(<Moderate roomId={Number(roomId)} position={membership.position} />);
   }
   if (sectionKey === "announcement") {
-    return <OfficerAnnouncement key={roomId} governancePage />;
+    return renderPage(<OfficerAnnouncement governancePage readOnly={readOnly} />);
+  }
+  if (sectionKey === "reports") {
+    return <GovernanceReports roomId={Number(roomId)} />;
   }
 
   const SectionIcon = section.icon;

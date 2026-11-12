@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import {
   Alert,
@@ -7,12 +7,13 @@ import {
   CircularProgress,
   Grid,
   Paper,
+  Snackbar,
   Stack,
   Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
-import { fetchMyRoom } from "../../api/roomAPI";
+import { fetchMyRoom, fetchRoomMembers } from "../../api/roomAPI";
 import {
   addBudget,
   deleteBudget,
@@ -40,7 +41,7 @@ function SummaryCard({ label, value, color }) {
   );
 }
 
-export default function BudgetPage({ roomId: selectedRoomId }) {
+export default function BudgetPage({ roomId: selectedRoomId, readOnly = false }) {
   const [room, setRoom] = useState(null);
   const [budgets, setBudgets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -48,37 +49,56 @@ export default function BudgetPage({ roomId: selectedRoomId }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState(null);
+  const [memberCount, setMemberCount] = useState(0);
+  const [notice, setNotice] = useState("");
+  const loadGeneration = useRef(0);
 
-  const loadBudgets = useCallback(async (roomId) => {
+  const loadBudgets = useCallback(async (roomId, generation = loadGeneration.current) => {
     if (!roomId) return;
     setLoading(true);
     try {
-      setBudgets(await fetchBudgets(roomId));
+      const [budgetRecords, roomMembers] = await Promise.all([
+        fetchBudgets(roomId),
+        fetchRoomMembers(roomId),
+      ]);
+      if (generation !== loadGeneration.current) return;
+      setBudgets(budgetRecords);
+      setMemberCount(roomMembers.length);
       setError("");
     } catch (loadError) {
+      if (generation !== loadGeneration.current) return;
       setError(loadError.message || "Unable to load budget records.");
     } finally {
-      setLoading(false);
+      if (generation === loadGeneration.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     let active = true;
+    const generation = ++loadGeneration.current;
+    setRoom(null);
+    setBudgets([]);
+    setMemberCount(0);
+    setError("");
+    setSelected(null);
+    setDialogOpen(false);
+    setLoading(true);
     fetchMyRoom(selectedRoomId)
       .then(async (currentRoom) => {
-        if (!active) return;
+        if (!active || generation !== loadGeneration.current) return;
         setRoom(currentRoom || null);
-        if (currentRoom?.room_id) await loadBudgets(currentRoom.room_id);
-        else setLoading(false);
+        if (currentRoom?.room_id) await loadBudgets(currentRoom.room_id, generation);
+        else if (generation === loadGeneration.current) setLoading(false);
       })
       .catch((loadError) => {
-        if (active) {
+        if (active && generation === loadGeneration.current) {
           setLoading(false);
           setError(loadError.message || "Unable to load your room.");
         }
       });
     return () => {
       active = false;
+      if (loadGeneration.current === generation) loadGeneration.current += 1;
     };
   }, [loadBudgets, selectedRoomId]);
 
@@ -87,9 +107,9 @@ export default function BudgetPage({ roomId: selectedRoomId }) {
       budgets.reduce(
         (total, item) => ({
           planned: total.planned + Number(item.planned_amount || 0),
-          spent: total.spent + Number(item.spent_amount || 0),
+          collected: total.collected + Number(item.total_collected || 0),
         }),
-        { planned: 0, spent: 0 },
+          { planned: 0, collected: 0 },
       ),
     [budgets],
   );
@@ -108,8 +128,13 @@ export default function BudgetPage({ roomId: selectedRoomId }) {
     setSaving(true);
     try {
       const payload = { ...form, room_id: room.room_id };
-      if (selected) await updateBudget(selected.budget_id, payload);
-      else await addBudget(payload);
+      if (selected) {
+        await updateBudget(selected.budget_id, payload);
+        setNotice("Budget plan updated.");
+      } else {
+        await addBudget(payload);
+        setNotice("Budget plan created.");
+      }
       await loadBudgets(room.room_id);
     } catch (saveError) {
       setError(saveError.message || "Unable to save the budget.");
@@ -120,6 +145,10 @@ export default function BudgetPage({ roomId: selectedRoomId }) {
   };
 
   const remove = async (budget) => {
+    if (Number(budget.total_collected || 0) > 0) {
+      setError("This budget has recorded member contributions and cannot be deleted.");
+      return;
+    }
     if (!window.confirm(`Delete "${budget.budget_name}"?`)) return;
     try {
       await deleteBudget(budget.budget_id);
@@ -149,23 +178,23 @@ export default function BudgetPage({ roomId: selectedRoomId }) {
             Budget
           </Typography>
           <Typography color="text.secondary">
-            Plan, track spending, and review your room budget.
+            Plan what your room needs and follow member contributions as they come in.
           </Typography>
         </Box>
-        {room && (
+        {room && !readOnly && (
           <Button
             variant="contained"
             startIcon={<AddIcon />}
             onClick={openAdd}
             sx={{
               width: { xs: "100%", sm: 150 },
-              height: { xs: 35, sm: 45 },
+              height: 44,
               minWidth: { xs: 45, sm: 50 },
               fontSize: { xs: 12, sm: 16 },
               padding: 0,
             }}
           >
-            Add Budget Item
+            Add Budget Plan
           </Button>
         )}
       </Stack>
@@ -179,23 +208,23 @@ export default function BudgetPage({ roomId: selectedRoomId }) {
         <Grid container spacing={2} sx={{ mb: 3 }}>
           <Grid size={{ xs: 12, sm: 4 }}>
             <SummaryCard
-              label="Total planned"
+              label="Total needed"
               value={totals.planned}
               color="primary.main"
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 4 }}>
             <SummaryCard
-              label="Total spent"
-              value={totals.spent}
-              color="warning.main"
+              label="Collected so far"
+              value={totals.collected}
+              color="success.main"
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 4 }}>
             <SummaryCard
-              label="Remaining balance"
-              value={totals.planned - totals.spent}
-              color="success.main"
+              label="Still to collect"
+              value={Math.max(0, totals.planned - totals.collected)}
+              color="warning.main"
             />
           </Grid>
         </Grid>
@@ -225,7 +254,7 @@ export default function BudgetPage({ roomId: selectedRoomId }) {
           />
           <Typography variant="h6">No budget items yet</Typography>
           <Typography color="text.secondary">
-            Add a budget item to start tracking planned and spent amounts.
+            Add a budget plan to set a target and calculate the suggested share per room member.
           </Typography>
         </Paper>
       ) : (
@@ -245,19 +274,26 @@ export default function BudgetPage({ roomId: selectedRoomId }) {
             <BudgetCard
               key={budget.budget_id}
               budget={budget}
-              onEdit={openEdit}
-              onDelete={remove}
+              onEdit={readOnly ? undefined : openEdit}
+              onDelete={readOnly ? undefined : remove}
             />
           ))}
         </Box>
       )}
 
-      <BudgetForm
+      {!readOnly && <BudgetForm
         open={dialogOpen}
         handleClose={() => !saving && setDialogOpen(false)}
         selectedBudget={selected}
+        memberCount={memberCount}
         onSubmit={save}
         loading={saving}
+      />}
+      <Snackbar
+        open={Boolean(notice)}
+        autoHideDuration={3500}
+        onClose={() => setNotice("")}
+        message={notice}
       />
     </Box>
   );

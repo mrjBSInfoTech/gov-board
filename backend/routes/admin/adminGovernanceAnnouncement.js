@@ -95,6 +95,7 @@ router.post("/", authenticateAdmin, uploadAnnouncementImages, async (req, res) =
         req.user.admin_id,
       ],
     );
+    req.auditTargetId = result.insertId;
     const [announcements] = await db.promise().query(
       `SELECT announcement_id, visibility_scope, college,
               announcement_body, link, images, date_created

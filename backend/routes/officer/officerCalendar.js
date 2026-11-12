@@ -1,10 +1,12 @@
 import express from "express";
 import db from "../../database/db.js";
 import { authenticateOfficer } from "../../middleware/officerAuthMiddleware.js";
+import { requireOfficerGovernanceAccess } from "../../middleware/officerGovernanceAccess.js";
 import {
   getRoomCalendarEventPredicate,
   getRoomCollegeMemberVisibilityPredicate,
 } from "../../utils/shared/calendarEventScope.js";
+import { canManageGovernanceSection } from "../../utils/officer/governancePermissions.js";
 
 const router = express.Router();
 const DATE_TIME_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
@@ -82,9 +84,22 @@ router.get("/", authenticateOfficer, (req, res) => {
     if (roomError) return res.status(500).json({ message: "Unable to identify the room." });
     if (!roomId) return res.status(403).json({ message: "You are not a member of this room." });
     db.query(
+      `SELECT position FROM room_member
+        WHERE room_id = ? AND member_id = ? AND member_type = 'officer'
+        LIMIT 1`,
+      [roomId, getOfficerId(req)],
+      (positionError, positionRows) => {
+    if (positionError) {
+      console.error("Officer calendar role lookup error:", positionError);
+      return res.status(500).json({ message: "Unable to verify event permissions." });
+    }
+    const canManageRoomEvents =
+      positionRows.length > 0 &&
+      canManageGovernanceSection(positionRows[0].position, "event-handlers");
+    db.query(
       `SELECT e.event_id, e.room_id, e.visibility_scope, e.college, e.title,
               e.description, e.start_at, e.end_at, e.reminder_minutes,
-              e.created_by, e.date_created, e.date_updated
+              e.created_by, e.created_by_admin, e.date_created, e.date_updated
          FROM room r
          JOIN calendar_event e ON ${getRoomCalendarEventPredicate()}
          JOIN student s ON s.student_id = ?
@@ -101,7 +116,17 @@ router.get("/", authenticateOfficer, (req, res) => {
           console.error("Calendar events query error:", err);
           return res.status(500).json({ message: "Unable to load calendar events." });
         }
-        res.json(results);
+        res.json(
+          results.map((event) => ({
+            ...event,
+            can_manage:
+              canManageRoomEvents &&
+              event.visibility_scope === "room" &&
+              !event.created_by_admin,
+          })),
+        );
+      },
+    );
       },
     );
   },
@@ -109,11 +134,19 @@ router.get("/", authenticateOfficer, (req, res) => {
   );
 });
 
-router.post("/", authenticateOfficer, (req, res) => {
+router.post(
+  "/",
+  authenticateOfficer,
+  requireOfficerGovernanceAccess({
+    section: "event-handlers",
+    action: "manage",
+    getRoomId: (req) => req.body?.room_id,
+  }),
+  (req, res) => {
   const { title, description, start_at, end_at, reminder_minutes } = req.body;
   const validationError = validateEvent(req.body);
   if (validationError) return res.status(400).json({ message: validationError });
-  getOfficerRoomId(req, req.body.room_id, (roomError, roomId) => {
+  getOfficerRoomId(req, req.governanceRoomId, (roomError, roomId) => {
     if (roomError) return res.status(500).json({ message: "Unable to identify the room." });
     if (!roomId) return res.status(403).json({ message: "You are not a member of this room." });
     db.query(
@@ -145,20 +178,35 @@ router.post("/", authenticateOfficer, (req, res) => {
       },
     );
   });
-});
+  },
+);
 
-router.put("/:id", authenticateOfficer, (req, res) => {
+router.put(
+  "/:id",
+  authenticateOfficer,
+  requireOfficerGovernanceAccess({
+    section: "event-handlers",
+    action: "manage",
+    resource: {
+      table: "calendar_event",
+      idParam: "id",
+      idColumn: "event_id",
+      roomColumn: "room_id",
+    },
+  }),
+  (req, res) => {
   const { title, description, start_at, end_at, reminder_minutes } = req.body;
   const validationError = validateEvent(req.body);
   if (validationError) return res.status(400).json({ message: validationError });
-  getOfficerRoomId(req, req.body.room_id, (roomError, roomId) => {
+  getOfficerRoomId(req, req.governanceRoomId, (roomError, roomId) => {
     if (roomError) return res.status(500).json({ message: "Unable to identify the room." });
     if (!roomId) return res.status(403).json({ message: "You are not a member of this room." });
     db.query(
       `UPDATE calendar_event
           SET title = ?, description = ?, start_at = ?, end_at = ?,
               reminder_minutes = ?, date_updated = CURRENT_TIMESTAMP
-        WHERE event_id = ? AND room_id = ? AND created_by = ?`,
+        WHERE event_id = ? AND room_id = ?
+          AND visibility_scope = 'room' AND created_by_admin IS NULL`,
       [
         title.trim(),
         description?.trim() || null,
@@ -167,7 +215,6 @@ router.put("/:id", authenticateOfficer, (req, res) => {
         reminder_minutes === "" || reminder_minutes === undefined ? null : Number(reminder_minutes),
         req.params.id,
         roomId,
-        getOfficerId(req),
       ],
       (err, result) => {
         if (err) {
@@ -182,16 +229,31 @@ router.put("/:id", authenticateOfficer, (req, res) => {
       },
     );
   });
-});
+  },
+);
 
-router.delete("/:id", authenticateOfficer, (req, res) => {
-  getOfficerRoomId(req, req.query.roomId, (roomError, roomId) => {
+router.delete(
+  "/:id",
+  authenticateOfficer,
+  requireOfficerGovernanceAccess({
+    section: "event-handlers",
+    action: "manage",
+    resource: {
+      table: "calendar_event",
+      idParam: "id",
+      idColumn: "event_id",
+      roomColumn: "room_id",
+    },
+  }),
+  (req, res) => {
+  getOfficerRoomId(req, req.governanceRoomId, (roomError, roomId) => {
     if (roomError) return res.status(500).json({ message: "Unable to identify the room." });
     if (!roomId) return res.status(403).json({ message: "You are not a member of this room." });
     db.query(
       `SELECT title FROM calendar_event
-        WHERE event_id = ? AND room_id = ? AND created_by = ?`,
-      [req.params.id, roomId, getOfficerId(req)],
+        WHERE event_id = ? AND room_id = ?
+          AND visibility_scope = 'room' AND created_by_admin IS NULL`,
+      [req.params.id, roomId],
       (lookupError, rows) => {
         if (lookupError) {
           console.error("Calendar event lookup before deletion error:", lookupError);
@@ -201,8 +263,10 @@ router.delete("/:id", authenticateOfficer, (req, res) => {
           return res.status(404).json({ message: "Event not found or you cannot delete it." });
         }
         db.query(
-          "DELETE FROM calendar_event WHERE event_id = ? AND room_id = ? AND created_by = ?",
-          [req.params.id, roomId, getOfficerId(req)],
+          `DELETE FROM calendar_event
+            WHERE event_id = ? AND room_id = ?
+              AND visibility_scope = 'room' AND created_by_admin IS NULL`,
+          [req.params.id, roomId],
           (err, result) => {
             if (err) {
               console.error("Calendar event deletion error:", err);
@@ -217,7 +281,8 @@ router.delete("/:id", authenticateOfficer, (req, res) => {
         );
       },
     );
-  });
+    },
+  );
 });
 
 export default router;

@@ -1,87 +1,132 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import {
   Alert,
   Box,
   Button,
+  Chip,
   CircularProgress,
+  Grid,
   Paper,
   Snackbar,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   TextField,
   Typography,
 } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
 import AccountBalanceWalletOutlinedIcon from "@mui/icons-material/AccountBalanceWalletOutlined";
 import SearchIcon from "@mui/icons-material/Search";
 import FundCard from "../../components/officer/Fund/FundCard";
 import FundContributeForm from "../../components/officer/Fund/FundContributeForm";
-import FundDelete from "../../components/officer/Fund/FundDelete";
-import FundForm from "../../components/officer/Fund/FundForm";
+import FundContributionReviewDialog from "../../components/officer/Fund/FundContributionReviewDialog";
 import {
-  addFund,
-  deleteFund,
   fetchFunds,
-  updateFund,
+  fetchRoomFundContributions,
 } from "../../api/officer/fundAPI";
 import { fetchMyRoom, fetchRoomMembers } from "../../api/roomAPI";
 
-export default function FundPage({ roomId: selectedRoomId }) {
+const formatMoney = (amount) =>
+  new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
+    minimumFractionDigits: 2,
+  }).format(Number(amount || 0));
+
+const formatDate = (value) => {
+  if (!value) return "—";
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat("en-PH", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }).format(date);
+};
+
+export default function FundPage({ roomId: selectedRoomId, readOnly = false }) {
   const [room, setRoom] = useState(null);
   const [funds, setFunds] = useState([]);
+  const [contributions, setContributions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [formOpen, setFormOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
   const [contributeOpen, setContributeOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [students, setStudents] = useState([]);
   const [selectedFund, setSelectedFund] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [notice, setNotice] = useState("");
+  const loadGeneration = useRef(0);
+  const activeRoomId = useRef(null);
 
-  const loadFunds = useCallback(async (roomId) => {
+  const loadFunds = useCallback(async (roomId, generation = loadGeneration.current) => {
     if (!roomId) {
       setFunds([]);
+      setContributions([]);
       setLoading(false);
       return;
     }
 
     setLoading(true);
     try {
-      setFunds(await fetchFunds(roomId));
+      const [roomFunds, roomContributions] = await Promise.all([
+        fetchFunds(roomId),
+        fetchRoomFundContributions(roomId),
+      ]);
+      if (generation !== loadGeneration.current) return;
+      setFunds(roomFunds);
+      setContributions(roomContributions);
+      setSelectedFund((current) =>
+        current
+          ? roomFunds.find((fund) => fund.fund_id === current.fund_id) || current
+          : current,
+      );
       setError("");
     } catch (loadError) {
+      if (generation !== loadGeneration.current) return;
       setError(loadError.message || "Unable to load funds.");
     } finally {
-      setLoading(false);
+      if (generation === loadGeneration.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     let active = true;
+    const generation = ++loadGeneration.current;
+    activeRoomId.current = null;
+    setRoom(null);
+    setFunds([]);
+    setContributions([]);
+    setStudents([]);
+    setSelectedFund(null);
+    setContributeOpen(false);
+    setReviewOpen(false);
+    setError("");
+    setLoading(true);
 
     const loadRoom = async () => {
       try {
         const currentRoom = await fetchMyRoom(selectedRoomId);
-        if (!active) return;
+        if (!active || generation !== loadGeneration.current) return;
 
         setRoom(currentRoom || null);
         if (currentRoom?.room_id) {
+          activeRoomId.current = Number(currentRoom.room_id);
           localStorage.setItem("joinedRoom", JSON.stringify(currentRoom));
           const members = await fetchRoomMembers(currentRoom.room_id);
-          setStudents(
-            (members || []).filter(
-              (member) => member.member_type === "student",
-            ),
-          );
-          await loadFunds(currentRoom.room_id);
+          if (!active || generation !== loadGeneration.current) return;
+          setStudents(members || []);
+          await loadFunds(currentRoom.room_id, generation);
         } else {
-          setLoading(false);
+          if (generation === loadGeneration.current) setLoading(false);
         }
       } catch (loadError) {
-        if (!active) return;
+        if (!active || generation !== loadGeneration.current) return;
         setLoading(false);
         setError(loadError.message || "Unable to load your room.");
       }
@@ -90,6 +135,8 @@ export default function FundPage({ roomId: selectedRoomId }) {
     loadRoom();
     return () => {
       active = false;
+      activeRoomId.current = null;
+      if (loadGeneration.current === generation) loadGeneration.current += 1;
     };
   }, [loadFunds, selectedRoomId]);
 
@@ -98,54 +145,41 @@ export default function FundPage({ roomId: selectedRoomId }) {
     if (!term) return funds;
 
     return funds.filter((fund) =>
-      [fund.fund_name, fund.description, fund.status]
+      [fund.fund_name, fund.description, fund.status, fund.budget_id ? "budget plan" : "historical fund"]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(term)),
     );
   }, [funds, search]);
 
-  const closeForm = () => {
-    if (!saving) {
-      setFormOpen(false);
-      setSelectedFund(null);
-    }
-  };
+  const visibleContributions = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return contributions;
+    return contributions.filter((contribution) =>
+      [
+        contribution.member_name,
+        contribution.budget_name,
+        contribution.fund_name,
+        contribution.payment_method,
+        contribution.remarks,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(term)),
+    );
+  }, [contributions, search]);
 
-  const saveFund = async (fundData) => {
-    setSaving(true);
-    try {
-      if (selectedFund) {
-        await updateFund(selectedFund.fund_id, fundData);
-        setNotice("Fund updated successfully.");
-      } else {
-        await addFund(fundData);
-        setNotice("Fund added successfully.");
-      }
-      setFormOpen(false);
-      setSelectedFund(null);
-      await loadFunds(room?.room_id);
-    } catch (saveError) {
-      setError(saveError.message || "Unable to save the fund.");
-      throw saveError;
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const removeFund = async (fundId) => {
-    setDeleting(true);
-    try {
-      await deleteFund(fundId);
-      setDeleteOpen(false);
-      setSelectedFund(null);
-      setNotice("Fund deleted successfully.");
-      await loadFunds(room?.room_id);
-    } catch (deleteError) {
-      setError(deleteError.message || "Unable to delete the fund.");
-    } finally {
-      setDeleting(false);
-    }
-  };
+  const planTotals = useMemo(
+    () =>
+      funds
+        .filter((fund) => fund.budget_id)
+        .reduce(
+          (totals, fund) => ({
+            needed: totals.needed + Number(fund.target_amount || 0),
+            collected: totals.collected + Number(fund.total_contributed || 0),
+          }),
+          { needed: 0, collected: 0 },
+        ),
+    [funds],
+  );
 
   return (
     <Box sx={{ p: { xs: 2, md: 3 } }}>
@@ -169,27 +203,17 @@ export default function FundPage({ roomId: selectedRoomId }) {
           </Typography>
           <Typography color="text.secondary">
             {room
-              ? "Manage funds for your room."
-              : "Join a room to manage funds."}
+              ? "Review budget collections and keep a room-wide record of member payments."
+              : "Join a room to review member contributions."}
           </Typography>
         </Box>
-        {room && (
+        {room && !readOnly && (
           <Button
             variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => {
-              setSelectedFund(null);
-              setFormOpen(true);
-            }}
-            sx={{
-              width: { xs: "100%", sm: 150 },
-              height: { xs: 35, sm: 45 },
-              minWidth: { xs: 45, sm: 50 },
-              fontSize: { xs: 12, sm: 16 },
-              padding: 0,
-            }}
+            onClick={() => setReviewOpen(true)}
+            sx={{ minHeight: 44, width: { xs: "100%", sm: "auto" }, textTransform: "none", fontWeight: 800 }}
           >
-            Add Fund
+            Verify contributions ({contributions.filter((item) => item.review_status === "Pending").length})
           </Button>
         )}
       </Stack>
@@ -207,7 +231,8 @@ export default function FundPage({ roomId: selectedRoomId }) {
             size="small"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search funds"
+            placeholder="Search plans, members, or payments"
+            inputProps={{ "aria-label": "Search plans, members, or payments" }}
             InputProps={{
               startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
             }}
@@ -226,76 +251,146 @@ export default function FundPage({ roomId: selectedRoomId }) {
         >
           <Typography variant="h6">No room joined</Typography>
           <Typography color="text.secondary">
-            Join a room from the Room menu before creating a fund.
-          </Typography>
-        </Paper>
-      ) : visibleFunds.length === 0 ? (
-        <Paper
-          variant="outlined"
-          sx={{ p: 5, textAlign: "center", borderRadius: 3 }}
-        >
-          <AccountBalanceWalletOutlinedIcon
-            sx={{ fontSize: 56, color: "text.disabled", mb: 1 }}
-          />
-          <Typography variant="h6">
-            {search ? "No matching funds" : "No funds yet"}
-          </Typography>
-          <Typography color="text.secondary">
-            {search
-              ? "Try a different search term."
-              : "Use Add Fund to create the first fund."}
+            Join a room from the Room menu to view its budget collections.
           </Typography>
         </Paper>
       ) : (
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: {
-              xs: "1fr",
-              md: "repeat(2, minmax(0, 1fr))",
-              lg: "repeat(3, minmax(0, 1fr))",
-            },
-            gap: 1.5,
-            alignItems: "stretch",
-          }}
-        >
-          {visibleFunds.map((fund) => (
-            <FundCard
-              key={fund.fund_id}
-              fund={fund}
-              onEdit={(selected) => {
-                setSelectedFund(selected);
-                setFormOpen(true);
-              }}
-              onDelete={(selected) => {
-                setSelectedFund(selected);
-                setDeleteOpen(true);
-              }}
-              onContribute={(selected) => {
-                setSelectedFund(selected);
-                setContributeOpen(true);
-              }}
-            />
-          ))}
-        </Box>
+        <Stack spacing={3}>
+          <Grid container spacing={2}>
+            {[
+              { label: "Needed by budget plans", amount: planTotals.needed, color: "primary.main" },
+              { label: "Collected for plans", amount: planTotals.collected, color: "success.main" },
+              { label: "Still to collect", amount: Math.max(0, planTotals.needed - planTotals.collected), color: "warning.main" },
+            ].map((item) => (
+              <Grid key={item.label} size={{ xs: 12, sm: 4 }}>
+                <Paper variant="outlined" sx={{ p: 2, borderRadius: 2.5 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    {item.label}
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 800, color: item.color }}>
+                    {formatMoney(item.amount)}
+                  </Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 800, mb: 1.5 }}>
+              Collections by budget plan
+            </Typography>
+            {visibleFunds.filter((fund) => fund.budget_id).length ? (
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))", lg: "repeat(3, minmax(0, 1fr))" }, gap: 1.5 }}>
+                {visibleFunds.filter((fund) => fund.budget_id).map((fund) => (
+                  <FundCard
+                    key={fund.fund_id}
+                    fund={fund}
+                  />
+                ))}
+              </Box>
+            ) : (
+              <Paper variant="outlined" sx={{ p: 3, textAlign: "center", borderRadius: 3 }}>
+                <AccountBalanceWalletOutlinedIcon sx={{ fontSize: 44, color: "text.disabled", mb: 0.5 }} />
+                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                  {search ? "No matching budget plans" : "No budget plans yet"}
+                </Typography>
+                <Typography color="text.secondary">
+                  {search ? "Try another search." : "Create a plan in Budget to start collecting member contributions."}
+                </Typography>
+              </Paper>
+            )}
+          </Box>
+
+          {visibleFunds.some((fund) => !fund.budget_id) && (
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 800, mb: 1.5 }}>
+                Historical funds
+              </Typography>
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))", lg: "repeat(3, minmax(0, 1fr))" }, gap: 1.5 }}>
+                {visibleFunds.filter((fund) => !fund.budget_id).map((fund) => (
+                  <FundCard
+                    key={fund.fund_id}
+                    fund={fund}
+                    onContribute={readOnly ? undefined : (selected) => {
+                      setSelectedFund(selected);
+                      setContributeOpen(true);
+                    }}
+                  />
+                ))}
+              </Box>
+            </Box>
+          )}
+
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 800, mb: 1.5 }}>
+              Member contribution log
+            </Typography>
+            <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 3, maxWidth: "100%" }}>
+              <Table size="small" aria-label="Member contribution log" sx={{ minWidth: 760 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Member</TableCell>
+                    <TableCell>Budget / fund</TableCell>
+                    <TableCell align="right">Amount</TableCell>
+                    <TableCell>Date paid</TableCell>
+                    <TableCell>Method</TableCell>
+                    <TableCell>Remarks</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {visibleContributions.length ? visibleContributions.map((contribution) => (
+                    <TableRow key={contribution.contribution_id} hover>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {contribution.member_name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {contribution.position || (contribution.member_type === "officer" ? "Officer" : "Member")}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">{contribution.budget_name}</Typography>
+                        {!contribution.budget_id && <Chip size="small" label="Historical" variant="outlined" sx={{ mt: 0.4 }} />}
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: "nowrap" }}>
+                        {formatMoney(contribution.amount)}
+                      </TableCell>
+                      <TableCell>{formatDate(contribution.payment_date)}</TableCell>
+                      <TableCell>{contribution.payment_method}</TableCell>
+                      <TableCell>
+                        <Stack spacing={0.5} alignItems="flex-start">
+                          <Chip
+                            size="small"
+                            label={contribution.review_status || "Approved"}
+                            color={
+                              contribution.review_status === "Pending"
+                                ? "warning"
+                                : contribution.review_status === "Rejected"
+                                  ? "error"
+                                  : "success"
+                            }
+                          />
+                          <Typography variant="caption">
+                            {contribution.review_remarks || contribution.remarks || "—"}
+                          </Typography>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  )) : (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                        {search ? "No matching payments." : "No member payments recorded yet."}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        </Stack>
       )}
 
-      <FundForm
-        open={formOpen}
-        handleClose={closeForm}
-        selectedFund={selectedFund}
-        roomId={room?.room_id}
-        onSubmit={saveFund}
-        loading={saving}
-      />
-      <FundDelete
-        open={deleteOpen}
-        handleClose={() => !deleting && setDeleteOpen(false)}
-        selectedFund={selectedFund}
-        onDelete={removeFund}
-        loading={deleting}
-      />
-      <FundContributeForm
+      {!readOnly && <FundContributeForm
         open={contributeOpen}
         handleClose={() => setContributeOpen(false)}
         fund={selectedFund}
@@ -306,7 +401,17 @@ export default function FundPage({ roomId: selectedRoomId }) {
             `${count} contribution${count === 1 ? "" : "s"} recorded successfully.`,
           );
         }}
-      />
+      />}
+      {!readOnly && <FundContributionReviewDialog
+        open={reviewOpen}
+        onClose={() => setReviewOpen(false)}
+        contributions={contributions}
+        onReviewed={() => {
+          const currentRoomId = activeRoomId.current;
+          if (currentRoomId !== Number(room?.room_id)) return undefined;
+          return loadFunds(currentRoomId, loadGeneration.current);
+        }}
+      />}
       <Snackbar
         open={Boolean(notice)}
         autoHideDuration={3500}

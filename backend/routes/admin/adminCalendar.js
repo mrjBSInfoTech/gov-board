@@ -167,6 +167,7 @@ router.post("/", authenticateAdmin, async (req, res) => {
         req.user.admin_id,
       ],
     );
+    req.auditTargetId = result.insertId;
     const event = await selectEvent(result.insertId);
     if (!event) {
       return res.status(500).json({ message: "Event was created but could not be loaded." });

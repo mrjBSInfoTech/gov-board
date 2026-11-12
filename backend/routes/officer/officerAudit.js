@@ -1,53 +1,25 @@
 import express from "express";
 import db from "../../database/db.js";
 import { authenticateOfficer } from "../../middleware/officerAuthMiddleware.js";
+import { requireOfficerGovernanceAccess } from "../../middleware/officerGovernanceAccess.js";
 import { logOfficerAudit } from "../../utils/officer/officerAuditLogger.js";
 
 const router = express.Router();
 router.use(authenticateOfficer);
 
-router.get("/", async (req, res) => {
-  const roomId = Number(req.query.roomId);
-  if (!Number.isSafeInteger(roomId) || roomId < 1) {
-    return res.status(400).json({ message: "A valid roomId is required." });
-  }
-
+router.get("/", requireOfficerGovernanceAccess({ section: "audit" }), async (req, res) => {
   try {
     const connection = db.promise();
-    const [memberships] = await connection.query(
-      `SELECT position FROM room_member
-        WHERE room_id = ? AND member_id = ? AND member_type = 'officer'
-        LIMIT 1`,
-      [roomId, req.user.officer_id],
-    );
-    if (!memberships.length) {
-      return res.status(403).json({ message: "You are not an officer in this room." });
-    }
-
-    const position = String(memberships[0].position || "")
-      .trim()
-      .toLowerCase()
-      .replace(/\./g, "");
-    if (!["mayor", "vice-mayor", "vice mayor", "secretary", "auditor", "protocol officer"].includes(position)) {
-      return res.status(403).json({ message: "Your room position cannot access audit records." });
-    }
+    const roomId = req.governanceRoomId;
 
   const { search = "", date = "", period = "all" } = req.query;
-  let sql = `SELECT a.audit_id, a.datetime, a.action, subject.student_number AS actor,
+  let sql = `SELECT a.audit_id, a.datetime, a.action, a.actor,
                     a.role, a.status, a.information
     FROM audit_logs a
-    INNER JOIN student subject ON
-      a.role IN ('Student', 'Officer') AND (
-        BINARY a.actor = BINARY subject.student_number
-        OR (a.role = 'Student' AND BINARY a.actor = BINARY CONCAT('Student ', subject.student_id))
-        OR (a.role = 'Officer' AND BINARY a.actor = BINARY CONCAT('Officer ', subject.student_id))
-      )
-    INNER JOIN room_member rm ON rm.room_id = a.room_id
-      AND rm.member_id = subject.student_id
     WHERE a.room_id = ? AND a.role IN ('Student', 'Officer')`;
   const params = [roomId];
   if (search) {
-    sql += ` AND (a.action LIKE ? OR subject.student_number LIKE ? OR a.role LIKE ?
+    sql += ` AND (a.action LIKE ? OR a.actor LIKE ? OR a.role LIKE ?
       OR a.status LIKE ? OR a.information LIKE ?)`;
     params.push(...Array(5).fill(`%${search}%`));
   }

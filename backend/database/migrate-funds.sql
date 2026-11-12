@@ -1,5 +1,5 @@
 -- Run this migration against the selected gov-board database.
--- Funds belong to a room. Contributions are recorded for students in that fund.
+-- Funds belong to a room. Contributions are recorded for room members in that fund.
 CREATE TABLE IF NOT EXISTS `funds` (
   `fund_id` int(11) NOT NULL AUTO_INCREMENT,
   `room_id` int(11) NOT NULL,

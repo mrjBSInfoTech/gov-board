@@ -74,6 +74,9 @@ function Detail({ label, value, strong = false, icon = null }) {
 export default function FundCard({ fund, onEdit, onDelete, onContribute }) {
   const [menuAnchor, setMenuAnchor] = useState(null);
   const status = statusColors[fund.status] || statusColors.Collecting;
+  const isComplete = fund.completion_status === "Complete";
+  const isClosed = fund.status === "Closed";
+  const hasActions = Boolean(onEdit || onDelete);
   const progress = Math.min(
     100,
     (Number(fund.total_contributed || 0) / Number(fund.target_amount || 1)) *
@@ -171,8 +174,8 @@ export default function FundCard({ fund, onEdit, onDelete, onContribute }) {
             strong
           />
           <Detail
-            label="Contribution"
-            value={`${formatAmount(fund.contribution_amount)} per student`}
+            label="Suggested amount per member"
+            value={formatAmount(fund.contribution_amount)}
           />
           <Detail
             label="Deadline"
@@ -180,56 +183,68 @@ export default function FundCard({ fund, onEdit, onDelete, onContribute }) {
             icon={<CalendarTodayOutlinedIcon fontSize="small" color="action" />}
           />
 
-          <Button
-            size="small"
-            variant="outlined"
-            onClick={() => {
-              closeMenu();
-              onContribute(fund);
-            }}
-            sx={{
-              width: "100%",
-              textTransform: "none",
-              fontWeight: 700,
-            }}
-          >
-            Record
-          </Button>
+          {onContribute && (
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => {
+                closeMenu();
+                onContribute(fund);
+              }}
+              sx={{
+                width: "100%",
+                minHeight: 44,
+                textTransform: "none",
+                fontWeight: 700,
+              }}
+              disabled={isComplete || isClosed}
+            >
+              {isComplete ? "Fully collected" : isClosed ? "Collection closed" : "Record payment"}
+            </Button>
+          )}
 
-          <IconButton
-            aria-label={`Actions for ${fund.fund_name}`}
-            onClick={(event) => setMenuAnchor(event.currentTarget)}
-            size="small"
-            sx={{ position: "absolute", top: 14, right: 14 }}
-          >
-            <MoreVertIcon fontSize="small" />
-          </IconButton>
+          {hasActions && (
+            <IconButton
+              aria-label={`Actions for ${fund.fund_name}`}
+              onClick={(event) => setMenuAnchor(event.currentTarget)}
+              size="small"
+              sx={{ position: "absolute", top: 14, right: 14, minWidth: 44, minHeight: 44 }}
+            >
+              <MoreVertIcon fontSize="small" />
+            </IconButton>
+          )}
         </Box>
 
-        <Menu
-          anchorEl={menuAnchor}
-          open={Boolean(menuAnchor)}
-          onClose={closeMenu}
-        >
-          <MenuItem
-            onClick={() => {
-              closeMenu();
-              onEdit(fund);
-            }}
-            sx={{ color: "success.main" }}
+        {hasActions && (
+          <Menu
+            anchorEl={menuAnchor}
+            open={Boolean(menuAnchor)}
+            onClose={closeMenu}
           >
-            <EditOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} /> Edit
-          </MenuItem>
-          <MenuItem
-            onClick={() => {
-              closeMenu();
-              onDelete(fund);
-            }}
-            sx={{ color: "error.main" }}
-          >
-            <DeleteOutlineIcon fontSize="small" sx={{ mr: 1.25 }} /> Delete
-          </MenuItem>
-        </Menu>
+            {onEdit && (
+              <MenuItem
+                onClick={() => {
+                  closeMenu();
+                  onEdit(fund);
+                }}
+                sx={{ color: "success.main" }}
+              >
+                <EditOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} /> Edit
+              </MenuItem>
+            )}
+            {onDelete && (
+              <MenuItem
+                onClick={() => {
+                  closeMenu();
+                  onDelete(fund);
+                }}
+                sx={{ color: "error.main" }}
+              >
+                <DeleteOutlineIcon fontSize="small" sx={{ mr: 1.25 }} /> Delete
+              </MenuItem>
+            )}
+          </Menu>
+        )}
       </CardContent>
     </Card>
   );

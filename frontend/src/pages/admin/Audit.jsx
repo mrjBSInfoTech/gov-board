@@ -324,7 +324,7 @@ export default function Audit() {
           </Paper>
         ) : (
           <TableContainer sx={{ overflowX: "auto" }}>
-            <Table size="small" sx={{ minWidth: 760 }}>
+            <Table size="small" sx={{ minWidth: 820 }}>
               <TableHead
                 sx={{
                   backgroundColor:
@@ -338,6 +338,7 @@ export default function Audit() {
                     "Datetime",
                     "Action",
                     "Actor",
+                    "Room ID",
                     "Role",
                     "Status",
                     "Information",
@@ -390,6 +391,9 @@ export default function Audit() {
                     </TableCell>
                     <TableCell sx={{ fontSize: 11, whiteSpace: "nowrap" }}>
                       {log.actor}
+                    </TableCell>
+                    <TableCell sx={{ fontSize: 11, whiteSpace: "nowrap" }}>
+                      {log.room_id ?? "-"}
                     </TableCell>
                     <TableCell>
                       <Chip

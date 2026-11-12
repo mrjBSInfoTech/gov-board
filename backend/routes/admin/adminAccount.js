@@ -161,6 +161,7 @@ router.post("/admins", authenticateAdmin, async (req, res) => {
         await bcrypt.hash(password, 10),
       ],
     );
+    req.auditTargetId = result.insertId;
     res.status(201).json({ message: "Admin account created.", admin_id: result.insertId });
   } catch (error) {
     if (error.code === "ER_DUP_ENTRY") {
@@ -445,7 +446,7 @@ router.post("/", authenticateAdmin, async (req, res) => {
     await connection.beginTransaction();
 
     const batchId = await resolveBatchId(connection, year, section);
-    await connection.query(
+    const [result] = await connection.query(
       `INSERT INTO student (admin_id, student_number, position, college, course, batch_id, first_name, last_name, password, role, can_add, can_edit, can_delete, can_moderate, date_created)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
       [
@@ -468,6 +469,7 @@ router.post("/", authenticateAdmin, async (req, res) => {
 
     await connection.commit();
 
+    req.auditTargetId = result.insertId;
     res.status(201).json({ message: "Officer account created successfully" });
   } catch (err) {
     console.error("Error:", err);

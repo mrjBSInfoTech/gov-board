@@ -17,7 +17,8 @@ router.get("/", async (req, res) => {
 
   try {
     let sql = `
-      SELECT a.audit_id, a.datetime, a.action, a.actor, a.role, a.status, a.information
+      SELECT a.audit_id, a.datetime, a.action, a.actor, a.role, a.status,
+             a.information, a.room_id
       FROM audit_logs a
       WHERE 1 = 1
     `;
@@ -39,10 +40,12 @@ router.get("/", async (req, res) => {
     if (search) {
       sql += `
         AND (
-          a.action LIKE ? OR a.actor LIKE ? OR a.role LIKE ? OR a.status LIKE ? OR a.information LIKE ?
+          a.action LIKE ? OR a.actor LIKE ? OR a.role LIKE ? OR a.status LIKE ?
+          OR a.information LIKE ? OR CAST(a.room_id AS CHAR) LIKE ?
         )
       `;
       params.push(
+        searchValue,
         searchValue,
         searchValue,
         searchValue,

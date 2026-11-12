@@ -30,7 +30,7 @@ const statusColors = {
 };
 
 const formatDate = (dateValue) => {
-  if (!dateValue) return "No date selected";
+  if (!dateValue) return "No deadline";
   const date = new Date(`${dateValue}T00:00:00`);
   return Number.isNaN(date.getTime())
     ? dateValue
@@ -72,10 +72,10 @@ function Detail({ label, value, strong = false, icon = null }) {
 
 export default function BudgetCard({ budget, onEdit, onDelete }) {
   const [menuAnchor, setMenuAnchor] = useState(null);
+  const hasActions = Boolean(onEdit || onDelete);
   const planned = Number(budget.planned_amount || 0);
-  const spent = Number(budget.spent_amount || 0);
-  const remaining = planned - spent;
-  const progress = Math.min(100, (spent / (planned || 1)) * 100);
+  const collected = Number(budget.total_collected || 0);
+  const progress = Math.min(100, (collected / (planned || 1)) * 100);
   const status = statusColors[budget.status] || statusColors.Planned;
   const closeMenu = () => setMenuAnchor(null);
 
@@ -144,9 +144,7 @@ export default function BudgetCard({ budget, onEdit, onDelete }) {
                 />
               </Box>
               <Typography variant="body2" noWrap color="text.secondary">
-                {budget.description ||
-                  budget.category ||
-                  "No description provided."}
+                {budget.description || budget.category || "No description provided."}
               </Typography>
               <LinearProgress
                 variant="determinate"
@@ -157,51 +155,59 @@ export default function BudgetCard({ budget, onEdit, onDelete }) {
           </Box>
 
           <Detail
-            label="Budget usage"
-            value={`${formatAmount(spent)} / ${formatAmount(planned)}`}
+            label="Amount needed"
+            value={formatAmount(planned)}
             strong
           />
-          <Detail label="Remaining" value={formatAmount(remaining)} />
+          <Detail label="Collected" value={formatAmount(collected)} />
           <Detail
-            label="Budget date"
-            value={formatDate(budget.budget_period)}
+            label="Suggested per member"
+            value={formatAmount(budget.contribution_amount)}
+          />
+          <Detail
+            label="Deadline"
+            value={formatDate(budget.deadline)}
             icon={<CalendarTodayOutlinedIcon fontSize="small" color="action" />}
           />
 
-          <IconButton
+          {hasActions && <IconButton
             aria-label={`Actions for ${budget.budget_name}`}
             onClick={(event) => setMenuAnchor(event.currentTarget)}
             size="small"
             sx={{ position: "absolute", top: 14, right: 14 }}
           >
             <MoreVertIcon fontSize="small" />
-          </IconButton>
+          </IconButton>}
         </Box>
 
-        <Menu
+        {hasActions && <Menu
           anchorEl={menuAnchor}
           open={Boolean(menuAnchor)}
           onClose={closeMenu}
         >
-          <MenuItem
-            onClick={() => {
-              closeMenu();
-              onEdit(budget);
-            }}
-            sx={{ color: "success.main" }}
-          >
-            <EditOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} /> Edit
-          </MenuItem>
-          <MenuItem
-            onClick={() => {
-              closeMenu();
-              onDelete(budget);
-            }}
-            sx={{ color: "error.main" }}
-          >
-            <DeleteOutlineIcon fontSize="small" sx={{ mr: 1.25 }} /> Delete
-          </MenuItem>
-        </Menu>
+          {onEdit && (
+            <MenuItem
+              onClick={() => {
+                closeMenu();
+                onEdit(budget);
+              }}
+              sx={{ color: "success.main" }}
+            >
+              <EditOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} /> Edit
+            </MenuItem>
+          )}
+          {onDelete && (
+            <MenuItem
+              onClick={() => {
+                closeMenu();
+                onDelete(budget);
+              }}
+              sx={{ color: "error.main" }}
+            >
+              <DeleteOutlineIcon fontSize="small" sx={{ mr: 1.25 }} /> Delete
+            </MenuItem>
+          )}
+        </Menu>}
       </CardContent>
     </Card>
   );

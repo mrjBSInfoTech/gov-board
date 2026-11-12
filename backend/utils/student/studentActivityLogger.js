@@ -1,20 +1,27 @@
 import { logAudit } from "../shared/auditLogger.js";
 import { getAuditRoomId } from "../shared/roomAuditScope.js";
 import { logStudentAudit } from "./studentAuditLogger.js";
+import { logOfficerAudit } from "../officer/officerAuditLogger.js";
 
 export function auditStudentActivity(req, res, next) {
   const path = req.path;
   if (path.startsWith("/audit") || path === "/authenticate/login") return next();
   const actions = { POST: "Create", PUT: "Update", PATCH: "Update", DELETE: "Delete" };
   res.once("finish", () => {
-    if (!req.user?.student_id || req.user.officer_id || req.user.admin_id) return;
+    if (req.user?.admin_id) return;
     if (res.statusCode < 400 && (req.method === "GET" || path.startsWith("/authenticate/"))) return;
-    void logStudentAudit(req.user.student_id, {
+    const event = {
       action: actions[req.method] || "View",
       status: res.statusCode >= 400 ? "FAILED" : "SUCCESS",
       room_id: getAuditRoomId(req),
-      information: `${req.method} ${path} (HTTP ${res.statusCode})`,
-    });
+      information:
+        req.auditInformation || `${req.method} ${path} (HTTP ${res.statusCode})`,
+    };
+    if (req.user?.officer_id) {
+      void logOfficerAudit(req.user.officer_id, event);
+    } else if (req.user?.student_id) {
+      void logStudentAudit(req.user.student_id, event);
+    }
   });
   next();
 }

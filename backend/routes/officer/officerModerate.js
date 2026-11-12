@@ -9,6 +9,7 @@ import {
   MUTE_DURATIONS,
   OFFICER_POSITIONS,
 } from "../../utils/officer/roomModeration.js";
+import { canAccessGovernanceSection } from "../../utils/officer/governancePermissions.js";
 
 const router = express.Router();
 
@@ -22,7 +23,13 @@ const parseMemberId = (value) => {
   return Number.isSafeInteger(memberId) && memberId > 0 ? memberId : null;
 };
 
-const getRoomModerator = async (connection, officerId, roomId, lock = false) => {
+const getRoomModerator = async (
+  connection,
+  officerId,
+  roomId,
+  lock = false,
+  readOnlyAccess = false,
+) => {
   const [rows] = await connection.query(
     `SELECT position
        FROM room_member
@@ -31,12 +38,18 @@ const getRoomModerator = async (connection, officerId, roomId, lock = false) => 
     [roomId, officerId],
   );
   if (!rows.length) return null;
-  return canAccessRoomModeration(rows[0].position) ? rows[0] : null;
+  return (
+    canAccessRoomModeration(rows[0].position) ||
+    (readOnlyAccess && canAccessGovernanceSection(rows[0].position, "moderate"))
+  )
+    ? rows[0]
+    : null;
 };
 
 const getRoomTarget = async (connection, roomId, memberId, lock = false) => {
   const [rows] = await connection.query(
-    `SELECT rm.member_id, rm.member_type, rm.position
+    `SELECT rm.member_id, rm.member_type, rm.position,
+            s.first_name, s.last_name, s.student_number
        FROM room_member rm
        INNER JOIN student s ON s.student_id = rm.member_id
       WHERE rm.room_id = ? AND rm.member_id = ?
@@ -65,10 +78,10 @@ router.get("/members", authenticateOfficer, async (req, res) => {
 
   try {
     const connection = db.promise();
-    const moderator = await getRoomModerator(connection, officerId, roomId);
+    const moderator = await getRoomModerator(connection, officerId, roomId, false, true);
     if (!moderator) {
       return res.status(403).json({
-        message: "Only the Mayor, Vice-Mayor, or Protocol Officer can access moderation.",
+        message: "Your position cannot access this room's moderation records.",
       });
     }
 
@@ -132,6 +145,8 @@ router.post("/:memberId/kick", authenticateOfficer, async (req, res) => {
       await clearOrphanedOfficerStatus(connection, [ids.memberId]);
     }
     await connection.commit();
+    req.auditRoomId = ids.roomId;
+    req.auditInformation = `Kicked ${target.member_type} "${target.first_name} ${target.last_name}" from the room`;
     return res.json({ message: "Member removed from this room." });
   } catch (error) {
     try {
@@ -179,8 +194,9 @@ router.post("/:memberId/promote", authenticateOfficer, async (req, res) => {
     }
 
     const [duplicates] = await connection.query(
-      `SELECT rm.member_id, rm.position
+      `SELECT rm.member_id, rm.position, s.first_name, s.last_name
          FROM room_member rm
+         INNER JOIN student s ON s.student_id = rm.member_id
         WHERE rm.room_id = ? AND rm.member_type = 'officer'
           AND rm.position = ? AND rm.member_id <> ?
         LIMIT 1 FOR UPDATE`,
@@ -235,6 +251,10 @@ router.post("/:memberId/promote", authenticateOfficer, async (req, res) => {
       [ids.memberId],
     );
     await connection.commit();
+    req.auditRoomId = ids.roomId;
+    req.auditInformation = duplicates.length
+      ? `Promoted "${target.first_name} ${target.last_name}" from ${target.position} to ${position}, replacing "${duplicates[0].first_name} ${duplicates[0].last_name}"`
+      : `Promoted "${target.first_name} ${target.last_name}" from ${target.position} to ${position}`;
     return res.json({ message: `Member promoted to ${position} in this room.` });
   } catch (error) {
     try {
@@ -279,6 +299,8 @@ router.post("/:memberId/demote", authenticateOfficer, async (req, res) => {
     );
     await clearOrphanedOfficerStatus(connection, [ids.memberId]);
     await connection.commit();
+    req.auditRoomId = ids.roomId;
+    req.auditInformation = `Demoted "${target.first_name} ${target.last_name}" from ${target.position} to Student`;
     return res.json({ message: "Officer demoted to student in this room." });
   } catch (error) {
     try {
@@ -324,6 +346,8 @@ router.post("/:memberId/mute", authenticateOfficer, async (req, res) => {
         WHERE room_id = ? AND member_id = ?`,
       [durationMinutes, ids.roomId, ids.memberId],
     );
+    req.auditRoomId = ids.roomId;
+    req.auditInformation = `Muted "${target.first_name} ${target.last_name}" for ${durationMinutes} minutes`;
     return res.json({ message: `Member muted for ${durationMinutes} minutes.` });
   } catch (error) {
     console.error("Room member mute error:", error);
@@ -358,6 +382,8 @@ router.post("/:memberId/unmute", authenticateOfficer, async (req, res) => {
       "UPDATE room_member SET muted_until = NULL WHERE room_id = ? AND member_id = ?",
       [ids.roomId, ids.memberId],
     );
+    req.auditRoomId = ids.roomId;
+    req.auditInformation = `Unmuted "${target.first_name} ${target.last_name}"`;
     return res.json({ message: "Member unmuted." });
   } catch (error) {
     console.error("Room member unmute error:", error);
