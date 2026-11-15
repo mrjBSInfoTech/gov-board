@@ -10,6 +10,7 @@ import multer from "multer";
 import adminAuthenticateRoutes from "./routes/admin/adminAuthentication.js";
 import adminAccountRoutes from "./routes/admin/adminAccount.js";
 import adminAuditRoutes from "./routes/admin/adminAudit.js";
+import adminBackupRoutes from "./routes/admin/adminBackup.js";
 import adminRoomRoutes from "./routes/admin/adminRoom.js";
 import adminStudentRoutes from "./routes/admin/adminStudent.js";
 import adminCalendarRoutes from "./routes/admin/adminCalendar.js";
@@ -69,6 +70,7 @@ app.use("/api/admin/students", adminStudentRoutes);
 app.use("/api/admin/calendar", adminCalendarRoutes);
 app.use("/api/admin/governance-announcements", adminGovernanceAnnouncementRoutes);
 app.use("/api/admin/audit", adminAuditRoutes);
+app.use("/api/admin/backup", adminBackupRoutes);
 // Routes (Officer)
 app.use("/api/officer", auditOfficerActivity);
 app.use("/api/officer/audit", officerAuditRoutes);

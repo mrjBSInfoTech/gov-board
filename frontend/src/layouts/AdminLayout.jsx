@@ -36,6 +36,7 @@ import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 import CampaignIcon from "@mui/icons-material/Campaign";
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import EventNoteIcon from "@mui/icons-material/EventNote";
+import SettingsIcon from "@mui/icons-material/Settings";
 
 // Animation transition
 const Transition = React.forwardRef(function Transition(props, ref) {
@@ -223,6 +224,11 @@ export default function AdminLayout() {
           icon: <EventNoteIcon />,
         },
       ],
+    },
+    {
+      segment: "settings",
+      title: "Settings",
+      icon: <SettingsIcon />,
     },
     {
       segment: "audit",

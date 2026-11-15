@@ -21,6 +21,7 @@ import AdminRoomDetails from "../pages/admin/RoomDetails";
 import AdminEventHandler from "../pages/admin/EventHandler";
 import AdminRoomGovernanceAnnouncement from "../pages/admin/RoomGovernanceAnnouncement";
 import AdminAudit from "../pages/admin/Audit";
+import AdminSettings from "../pages/admin/Settings";
 import AdminLogin from "../pages/admin/Login";
 
 // Student Pages
@@ -130,6 +131,7 @@ export default function AppRoutes() {
                   path="room/governance/event-handlers"
                   element={<Navigate to="/admin/rooms/main" replace />}
                 />
+                <Route path="settings" element={<AdminSettings />} />
                 <Route path="audit" element={<AdminAudit />} />
               </Route>
             </Route>
