@@ -13,6 +13,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useNavigate } from "react-router-dom";
+import { getRoomAudienceLabel } from "../../../utils/roomAudience";
 
 function RoomCard({ room, onEdit, onDelete, onCopy, copied }) {
   const navigate = useNavigate();
@@ -37,7 +38,7 @@ function RoomCard({ room, onEdit, onDelete, onCopy, copied }) {
           {room.room_name}
         </Typography>
         <Typography variant="caption" color="text.secondary">
-          {room.college || "Unassigned college"}
+          For {getRoomAudienceLabel(room)}
         </Typography>
         {room.description && (
           <Typography

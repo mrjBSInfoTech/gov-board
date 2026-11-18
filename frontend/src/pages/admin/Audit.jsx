@@ -24,6 +24,7 @@ import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import SearchIcon from "@mui/icons-material/Search";
 import { fetchAuditLogs } from "../../api/admin/auditLogAPI";
 import { useTheme } from "@mui/material/styles";
+import { formatAuditInformation } from "../../utils/auditDisplay";
 
 export default function Audit() {
   const theme = useTheme();
@@ -465,7 +466,7 @@ export default function Audit() {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {log.information || "-"}
+                      {formatAuditInformation(log)}
                     </TableCell>
                   </TableRow>
                 ))}

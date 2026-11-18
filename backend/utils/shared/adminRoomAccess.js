@@ -3,6 +3,7 @@ import { PRIMARY_ADMIN_ID } from "./adminScope.js";
 export const getAdminRoomAccess = async (database, adminId, roomId) => {
   const [rows] = await database.promise().query(
     `SELECT r.room_id, r.college AS room_college,
+            r.all_colleges,
             a.admin_id, a.position, a.college
        FROM room r
        INNER JOIN admin a ON a.admin_id = ?
@@ -12,8 +13,14 @@ export const getAdminRoomAccess = async (database, adminId, roomId) => {
           OR (
             a.position IN ('Governor', 'College Head')
             AND (
-              NULLIF(TRIM(r.college), '') IS NULL
-              OR a.college = r.college
+              LOWER(r.college) = LOWER(a.college)
+              OR r.all_colleges = 1
+              OR EXISTS (
+                SELECT 1
+                  FROM room_college rc
+                 WHERE rc.room_id = r.room_id
+                   AND LOWER(rc.college) = LOWER(a.college)
+              )
             )
           )
         )

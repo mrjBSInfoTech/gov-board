@@ -267,7 +267,7 @@ function RoomForm({ open, handleClose, selectedRoom, onSubmit }) {
           />
           <FormControl>
             <FormLabel id="room-college-audience-label">
-              Which colleges should receive governance announcements and events?
+              Which colleges should this room be available to?
             </FormLabel>
             <RadioGroup
               aria-labelledby="room-college-audience-label"
@@ -291,9 +291,10 @@ function RoomForm({ open, handleClose, selectedRoom, onSubmit }) {
               />
             </RadioGroup>
             <Typography variant="caption" color="text.secondary">
-              This setting only filters Governor and College Head announcements and events.
-              College-specific posts are shown only to members whose college is
-              selected here. Anyone with the room code can still join.
+              Governors and College Heads from the selected colleges can view
+              this room in the admin console. The room's assigned college
+              retains access to manage it. College-specific posts and events
+              also use this audience. Anyone with the room code can still join.
             </Typography>
             {!form.all_colleges && (
               <>

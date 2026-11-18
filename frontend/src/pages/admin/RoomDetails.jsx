@@ -15,6 +15,7 @@ import { fetchRoom, fetchRoomAnnouncements } from "../../api/admin/roomAPI";
 import AnnouncementCard from "../../components/officer/Announcement/AnnouncementCard";
 import RoomTabs from "../../components/room/RoomTabs";
 import RoomJoinRequestsDialog from "../../components/room/RoomJoinRequestsDialog";
+import { getRoomAudienceLabel } from "../../utils/roomAudience";
 
 export default function RoomDetails() {
   const { roomId } = useParams();
@@ -97,7 +98,7 @@ export default function RoomDetails() {
               {room.description}
             </Typography>
             <Typography color="text.secondary">
-              College: {room.college || "Unassigned"}
+              Audience: {getRoomAudienceLabel(room)}
             </Typography>
             <Typography color="text.secondary">
               Room code: <strong>{room.room_number}</strong>

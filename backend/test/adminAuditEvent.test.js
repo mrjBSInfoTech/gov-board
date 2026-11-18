@@ -19,7 +19,8 @@ test("admin mutation routes create audit events for each managed section", () =>
     assert.ok(event, `${path} should be audited`);
     assert.equal(event.status, "Success");
     assert.equal(event.actor, "admin-one");
-    assert.match(event.information, /record 31/);
+    assert.doesNotMatch(event.information, /\bPOST\b|\bGET\b|HTTP|\/accounts|\/rooms|\/calendar/);
+    assert.match(event.information, /Created|Promoted|Unable to (create|promote)/);
   }
 });
 
@@ -30,7 +31,22 @@ test("admin audit events record failed mutations and promotion actions", () => {
   );
   assert.equal(event.action, "Promote");
   assert.equal(event.status, "Failed");
-  assert.match(event.information, /record 12/);
+  assert.match(event.information, /Promoted|Unable to promote/);
+});
+
+test("admin governance announcement deletions create a readable audit event", () => {
+  const event = createAdminAuditEvent(
+    {
+      method: "DELETE",
+      path: "/governance-announcements/18",
+      user: admin,
+    },
+    200,
+  );
+  assert.equal(event.action, "Delete");
+  assert.equal(event.status, "Success");
+  assert.match(event.information, /Deleted a governance announcement/);
+  assert.match(event.information, /18/);
 });
 
 test("admin audit records preserve validated room context without exposing request data", () => {

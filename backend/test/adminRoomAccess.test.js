@@ -11,28 +11,45 @@ const admins = [
   { admin_id: 1, position: "Super Admin", college: null },
   { admin_id: 2, position: "College Head", college: "Engineering" },
   { admin_id: 3, position: "Governor", college: "Engineering" },
+  { admin_id: 4, position: "Governor", college: "Arts" },
 ];
 const rooms = [
-  { room_id: 10, college: "Engineering" },
-  { room_id: 20, college: "Arts" },
-  { room_id: 30, college: null },
-  { room_id: 40, college: "" },
+  { room_id: 10, college: "Engineering", all_colleges: 0, colleges: ["Engineering"] },
+  { room_id: 20, college: "Arts", all_colleges: 0, colleges: ["Arts"] },
+  { room_id: 30, college: null, all_colleges: 1, colleges: [] },
+  { room_id: 40, college: "", all_colleges: 1, colleges: [] },
+  { room_id: 50, college: null, all_colleges: 0, colleges: ["Engineering"] },
+  { room_id: 60, college: null, all_colleges: 0, colleges: ["Arts"] },
+  { room_id: 70, college: "Engineering", all_colleges: 1, colleges: [] },
 ];
 
 const createDatabase = () => ({
   promise: () => ({
     query: async (sql, [adminId, roomId, primaryAdminId]) => {
       assert.match(sql, /r\.room_id = \?/);
-      assert.match(sql, /NULLIF\(TRIM\(r\.college\), ''\) IS NULL/);
       const admin = admins.find((item) => item.admin_id === adminId);
       const room = rooms.find((item) => item.room_id === roomId);
+      if (admin?.admin_id !== primaryAdminId) {
+        assert.match(sql, /r\.all_colleges = 1/);
+        assert.match(sql, /FROM room_college rc/);
+      }
+      const isSuperAdmin =
+        admin?.admin_id === primaryAdminId &&
+        admin.position === "Super Admin";
+      const isCollegeAdmin =
+        ["Governor", "College Head"].includes(admin?.position);
+      const ownsRoom =
+        room?.college?.trim() &&
+        admin?.college?.toLowerCase() === room.college.toLowerCase();
+      const matchesAudience =
+        room?.all_colleges ||
+        room?.colleges.some(
+          (college) =>
+            college.toLowerCase() === admin?.college?.toLowerCase(),
+        );
       const canAccess =
-        admin &&
-        room &&
-        ((admin.admin_id === primaryAdminId &&
-          admin.position === "Super Admin") ||
-          (["Governor", "College Head"].includes(admin.position) &&
-          (!room.college?.trim() || admin.college === room.college)));
+        Boolean(admin && room) &&
+        (isSuperAdmin || (isCollegeAdmin && (ownsRoom || matchesAudience)));
       return [[
         ...(canAccess
         ? [{ ...room, room_college: room.college, ...admin }]
@@ -53,7 +70,7 @@ test("admin room access is limited to the assigned college", async () => {
   assert.equal(await getAdminRoomAccess(database, 2, 999), null);
 });
 
-test("Governors and College Heads can access rooms without an assigned college", async () => {
+test("room access respects global and selected-college audiences", async () => {
   const database = createDatabase();
   for (const adminId of [2, 3]) {
     assert.deepEqual(await getAdminRoomAccess(database, adminId, 30), {
@@ -66,7 +83,25 @@ test("Governors and College Heads can access rooms without an assigned college",
       college: "Engineering",
       roomCollege: "",
     });
+    assert.deepEqual(await getAdminRoomAccess(database, adminId, 50), {
+      isSuperAdmin: false,
+      college: "Engineering",
+      roomCollege: null,
+    });
+    assert.equal(await getAdminRoomAccess(database, adminId, 60), null);
   }
+
+  assert.deepEqual(await getAdminRoomAccess(database, 4, 60), {
+    isSuperAdmin: false,
+    college: "Arts",
+    roomCollege: null,
+  });
+  assert.equal(await getAdminRoomAccess(database, 4, 50), null);
+  assert.deepEqual(await getAdminRoomAccess(database, 4, 70), {
+    isSuperAdmin: false,
+    college: "Arts",
+    roomCollege: "Engineering",
+  });
 });
 
 test("only the primary Super Admin can access rooms across colleges", async () => {
@@ -86,16 +121,23 @@ test("only the primary Super Admin can access rooms across colleges", async () =
     college: null,
     roomCollege: null,
   });
+  assert.deepEqual(await getAdminRoomAccess(database, 1, 50), {
+    isSuperAdmin: true,
+    college: null,
+    roomCollege: null,
+  });
 });
 
-test("room filters permit assigned-college rooms and unassigned rooms only", () => {
+test("room filters permit owned, global, and matching-audience rooms only", () => {
   const req = {
     user: { is_super_admin: false, college: "Engineering" },
   };
-  assert.deepEqual(getAdminRoomCollegeFilter(req, "r.college"), {
-    sql: " AND (NULLIF(TRIM(r.college), '') IS NULL OR r.college = ?)",
-    params: ["Engineering"],
-  });
+  const filter = getAdminRoomCollegeFilter(req, "r.college");
+  assert.deepEqual(filter.params, ["Engineering", "Engineering"]);
+  assert.match(filter.sql, /LOWER\(r\.college\) = LOWER\(\?\)/);
+  assert.match(filter.sql, /r\.all_colleges = 1/);
+  assert.match(filter.sql, /rc\.room_id = r\.room_id/);
+  assert.match(filter.sql, /LOWER\(rc\.college\) = LOWER\(\?\)/);
 
   const superAdminReq = {
     user: { is_super_admin: true, college: null },

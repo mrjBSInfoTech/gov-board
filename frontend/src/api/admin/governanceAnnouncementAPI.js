@@ -42,3 +42,12 @@ export const createGovernanceAnnouncement = async (announcement) => {
     handleError(error);
   }
 };
+
+export const deleteGovernanceAnnouncement = async (announcementId) => {
+  try {
+    const response = await api.delete(`/${announcementId}`);
+    return response.data;
+  } catch (error) {
+    handleError(error);
+  }
+};

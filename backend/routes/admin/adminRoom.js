@@ -203,6 +203,7 @@ router.get("/:id/announcements", authenticateAdmin, async (req, res) => {
              FROM governance_announcement ga
              JOIN room r ON r.room_id = ?
             WHERE r.room_id = ?
+              ${roomCollegeFilter.sql}
               AND (
                 ga.visibility_scope = 'global'
                 OR (
@@ -218,6 +219,7 @@ router.get("/:id/announcements", authenticateAdmin, async (req, res) => {
         ...roomCollegeFilter.params,
         roomId,
         roomId,
+        ...roomCollegeFilter.params,
         ...governanceCollegeParams,
       ],
     );

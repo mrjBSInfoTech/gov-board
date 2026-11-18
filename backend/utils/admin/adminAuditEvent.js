@@ -1,3 +1,5 @@
+import { describeAuditRequest } from "../shared/auditDescription.js";
+
 const adminMutationPath =
   /^\/(accounts|students|rooms|calendar|governance-announcements)(?:\/|$)/;
 const mutationActions = {
@@ -48,7 +50,7 @@ export const createAdminAuditEvent = (req, statusCode) => {
     action: eventAction,
     actor: req.user.username || `Admin ${req.user.admin_id}`,
     status: succeeded ? "Success" : "Failed",
-    information: `${req.method} ${path}${targetId ? ` (record ${targetId})` : ""}`,
+    information: describeAuditRequest(req, statusCode, eventAction, targetId),
     room_id: roomId,
   };
 };

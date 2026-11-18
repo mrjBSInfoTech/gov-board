@@ -7,6 +7,7 @@ import {
   CardContent,
   CircularProgress,
   IconButton,
+  Snackbar,
   Stack,
   TextField,
   Tooltip,
@@ -18,10 +19,12 @@ import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import DeleteIcon from "@mui/icons-material/Delete";
 import {
   createGovernanceAnnouncement,
+  deleteGovernanceAnnouncement,
   fetchGovernanceAnnouncements,
 } from "../../api/admin/governanceAnnouncementAPI";
 import { API_BASE_URL } from "../../api/apiBaseURL";
 import { getAnnouncementImages } from "../../utils/announcementImages";
+import AnnouncementDelete from "../../components/officer/Announcement/AnnouncementDelete";
 
 const GOVERNANCE_IMAGE_BASE_URL = `${API_BASE_URL}/uploads/admin/governanceAnnouncement`;
 
@@ -37,6 +40,9 @@ export default function RoomGovernanceAnnouncement() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const previews = files.map((file) => ({
@@ -93,6 +99,29 @@ export default function RoomGovernanceAnnouncement() {
       ...selectedFiles,
     ]);
     event.target.value = "";
+  };
+
+  const canDeleteAnnouncement = (announcement) =>
+    isGlobalAdmin ||
+    (announcement.visibility_scope === "college" &&
+      String(announcement.college || "").toLocaleLowerCase() ===
+        String(adminCollege || "").toLocaleLowerCase());
+
+  const handleDeleteAnnouncement = async (announcementId) => {
+    setDeleting(true);
+    setError("");
+    setSuccess("");
+    try {
+      await deleteGovernanceAnnouncement(announcementId);
+      setDeleteOpen(false);
+      setSelectedAnnouncement(null);
+      setSuccess("Announcement deleted.");
+      await loadAnnouncements();
+    } catch (deleteError) {
+      setError(deleteError.message || "Unable to delete announcement.");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -197,7 +226,6 @@ export default function RoomGovernanceAnnouncement() {
               )}
             </Box>
             {error && <Alert severity="error">{error}</Alert>}
-            {success && <Alert severity="success">{success}</Alert>}
             <Box>
               <Button
                 type="submit"
@@ -230,6 +258,7 @@ export default function RoomGovernanceAnnouncement() {
                 <Stack
                   direction={{ xs: "column", sm: "row" }}
                   justifyContent="space-between"
+                  alignItems={{ xs: "stretch", sm: "flex-start" }}
                   spacing={1}
                   sx={{ mb: 1 }}
                 >
@@ -238,7 +267,11 @@ export default function RoomGovernanceAnnouncement() {
                       ? "Every college"
                       : announcement.college}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ alignSelf: { xs: "flex-end", sm: "auto" }, textAlign: "right" }}
+                  >
                     {new Date(announcement.date_created).toLocaleString()}
                   </Typography>
                 </Stack>
@@ -285,11 +318,57 @@ export default function RoomGovernanceAnnouncement() {
                     ))}
                   </Box>
                 )}
+                {canDeleteAnnouncement(announcement) && (
+                  <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
+                    <Tooltip title="Delete announcement">
+                      <IconButton
+                        color="error"
+                        aria-label="Delete announcement"
+                        disabled={deleting}
+                        onClick={() => {
+                          setSelectedAnnouncement(announcement);
+                          setDeleteOpen(true);
+                        }}
+                        sx={{ width: 44, height: 44 }}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                )}
               </CardContent>
             </Card>
           ))}
         </Stack>
       )}
+
+      <AnnouncementDelete
+        open={deleteOpen}
+        handleClose={() => {
+          if (!deleting) {
+            setDeleteOpen(false);
+            setSelectedAnnouncement(null);
+          }
+        }}
+        selectedAnnouncement={selectedAnnouncement}
+        onDelete={handleDeleteAnnouncement}
+        loading={deleting}
+      />
+      <Snackbar
+        open={Boolean(success)}
+        autoHideDuration={4000}
+        onClose={() => setSuccess("")}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      >
+        <Alert
+          onClose={() => setSuccess("")}
+          severity="success"
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
+          {success}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

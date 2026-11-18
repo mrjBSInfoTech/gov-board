@@ -25,6 +25,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import { fetchAuditLogs } from "../../api/officer/auditLogAPI";
 import { fetchMyRoom } from "../../api/roomAPI";
 import { useTheme } from "@mui/material/styles";
+import { formatAuditInformation } from "../../utils/auditDisplay";
 
 export default function Audit({ roomId }) {
   const theme = useTheme();
@@ -473,7 +474,7 @@ export default function Audit({ roomId }) {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {log.information || "-"}
+                      {formatAuditInformation(log)}
                     </TableCell>
                   </TableRow>
                 ))}

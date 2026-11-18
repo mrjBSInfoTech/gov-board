@@ -6,9 +6,11 @@ import db from "../../database/db.js";
 import { authenticateAdmin } from "../../middleware/adminAuthMiddleware.js";
 import { getAdminEventScope } from "../../utils/shared/calendarEventScope.js";
 import { getAnnouncementImages } from "../../utils/shared/announcementImages.js";
+import { getGovernanceAnnouncementDeleteScope } from "../../utils/admin/governanceAnnouncementScope.js";
 import {
   createAnnouncementImageUpload,
   removeAnnouncementFiles,
+  removeAnnouncementImageNames,
 } from "../../utils/shared/announcementImageUpload.js";
 
 const router = express.Router();
@@ -116,6 +118,46 @@ router.post("/", authenticateAdmin, uploadAnnouncementImages, async (req, res) =
     removeAnnouncementFiles(req.files);
     console.error("Governance announcement creation error:", error);
     res.status(500).json({ message: "Unable to create governance announcement." });
+  }
+});
+
+router.delete("/:id", authenticateAdmin, async (req, res) => {
+  const announcementId = Number(req.params.id);
+  if (!Number.isSafeInteger(announcementId) || announcementId < 1) {
+    return res.status(400).json({ message: "A valid announcement ID is required." });
+  }
+
+  const scope = getGovernanceAnnouncementDeleteScope(req.user);
+  try {
+    const connection = db.promise();
+    const [announcements] = await connection.query(
+      `SELECT images
+         FROM governance_announcement
+        WHERE announcement_id = ?${scope.sql}
+        LIMIT 1`,
+      [announcementId, ...scope.params],
+    );
+    if (!announcements.length) {
+      return res.status(404).json({ message: "Announcement not found." });
+    }
+
+    const [result] = await connection.query(
+      `DELETE FROM governance_announcement
+        WHERE announcement_id = ?${scope.sql}`,
+      [announcementId, ...scope.params],
+    );
+    if (!result.affectedRows) {
+      return res.status(404).json({ message: "Announcement not found." });
+    }
+
+    removeAnnouncementImageNames(
+      uploadDir,
+      getAnnouncementImages(announcements[0].images),
+    );
+    res.json({ message: "Announcement deleted successfully." });
+  } catch (error) {
+    console.error("Governance announcement deletion error:", error);
+    res.status(500).json({ message: "Unable to delete governance announcement." });
   }
 });
 

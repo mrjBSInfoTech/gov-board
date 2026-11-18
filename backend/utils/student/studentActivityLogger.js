@@ -2,6 +2,7 @@ import { logAudit } from "../shared/auditLogger.js";
 import { getAuditRoomId } from "../shared/roomAuditScope.js";
 import { logStudentAudit } from "./studentAuditLogger.js";
 import { logOfficerAudit } from "../officer/officerAuditLogger.js";
+import { describeAuditRequest } from "../shared/auditDescription.js";
 
 export function auditStudentActivity(req, res, next) {
   const path = req.path;
@@ -15,7 +16,8 @@ export function auditStudentActivity(req, res, next) {
       status: res.statusCode >= 400 ? "FAILED" : "SUCCESS",
       room_id: getAuditRoomId(req),
       information:
-        req.auditInformation || `${req.method} ${path} (HTTP ${res.statusCode})`,
+        req.auditInformation ||
+        describeAuditRequest(req, res.statusCode),
     };
     if (req.user?.officer_id) {
       void logOfficerAudit(req.user.officer_id, event);
