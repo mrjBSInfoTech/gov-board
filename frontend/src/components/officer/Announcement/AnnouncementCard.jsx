@@ -1,4 +1,18 @@
-import { Card, Typography, IconButton, Box, Tooltip, Link as MuiLink } from "@mui/material";
+import { useId, useState } from "react";
+import {
+  Box,
+  ButtonBase,
+  Card,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  Link as MuiLink,
+  Tooltip,
+  Typography,
+} from "@mui/material";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import CloseIcon from "@mui/icons-material/Close";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import LaunchIcon from "@mui/icons-material/Launch";
@@ -6,6 +20,10 @@ import { API_BASE_URL } from "../../../api/apiBaseURL";
 import { getAnnouncementImages } from "../../../utils/announcementImages";
 
 function AnnouncementCard({ announcement, onEdit, onDelete }) {
+  const dialogTitleId = useId();
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
+
   if (!announcement) return null;
 
   const imageNames = getAnnouncementImages(announcement);
@@ -23,6 +41,18 @@ function AnnouncementCard({ announcement, onEdit, onDelete }) {
       month: "short",
       day: "numeric",
     });
+  };
+  const announcementLink = announcement.link
+    ? announcement.link.startsWith("http")
+      ? announcement.link
+      : `https://${announcement.link}`
+    : null;
+  const announcementPreview =
+    announcement.announcement_body?.replace(/\s+/g, " ").trim().slice(0, 80) ||
+    "Announcement details";
+  const closeDetails = () => {
+    setDetailsOpen(false);
+    setPreviewImage(null);
   };
 
   return (
@@ -45,9 +75,34 @@ function AnnouncementCard({ announcement, onEdit, onDelete }) {
         },
         position: "relative",
         overflow: "hidden",
+        cursor: "pointer",
       }}
     >
-      <Box sx={{ p: { xs: 2.5, sm: 3 } }}>
+      <ButtonBase
+        aria-label={`Open announcement: ${announcementPreview}`}
+        onClick={() => setDetailsOpen(true)}
+        sx={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 0,
+          width: "100%",
+          height: "100%",
+          borderRadius: 4,
+          "&.Mui-focusVisible": {
+            outline: "3px solid",
+            outlineColor: "primary.main",
+            outlineOffset: -3,
+          },
+        }}
+      />
+      <Box
+        sx={{
+          position: "relative",
+          zIndex: 1,
+          p: { xs: 2.5, sm: 3 },
+          pointerEvents: "none",
+        }}
+      >
         {/* Header: Date and Actions */}
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2.5 }}>
           <Typography
@@ -60,7 +115,7 @@ function AnnouncementCard({ announcement, onEdit, onDelete }) {
 
           {/* Action Buttons */}
           {(onEdit || onDelete) && (
-            <Box sx={{ display: "flex", gap: 1 }}>
+            <Box sx={{ display: "flex", gap: 1, pointerEvents: "auto" }}>
               {onEdit && (
                 <Tooltip title="Edit Post">
                   <IconButton
@@ -124,16 +179,13 @@ function AnnouncementCard({ announcement, onEdit, onDelete }) {
         {/* Link */}
         {announcement.link && (
           <MuiLink
-            href={
-              announcement.link.startsWith("http")
-                ? announcement.link
-                : `https://${announcement.link}`
-            }
+            href={announcementLink}
             target="_blank"
             rel="noopener noreferrer"
             underline="none"
             sx={{
               display: "inline-flex",
+              pointerEvents: "auto",
               alignItems: "center",
               gap: 1,
               px: 3,
@@ -187,6 +239,185 @@ function AnnouncementCard({ announcement, onEdit, onDelete }) {
           </Box>
         )}
       </Box>
+
+      <Dialog
+        open={detailsOpen}
+        onClose={closeDetails}
+        fullWidth={!previewImage}
+        maxWidth={previewImage ? false : "md"}
+        fullScreen={Boolean(previewImage)}
+        aria-labelledby={dialogTitleId}
+        PaperProps={{ sx: { borderRadius: previewImage ? 0 : 3 } }}
+      >
+        {previewImage ? (
+          <>
+            <DialogTitle
+              id={dialogTitleId}
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 1,
+              }}
+            >
+              <ButtonBase
+                onClick={() => setPreviewImage(null)}
+                sx={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 1,
+                  minHeight: 44,
+                  borderRadius: 1,
+                  px: 1,
+                  "&:focus-visible": {
+                    outline: "3px solid",
+                    outlineColor: "primary.main",
+                  },
+                }}
+              >
+                <ArrowBackIcon />
+                <Typography component="span" fontWeight={600}>
+                  Back to announcement
+                </Typography>
+              </ButtonBase>
+              <IconButton onClick={closeDetails} aria-label="Close announcement">
+                <CloseIcon />
+              </IconButton>
+            </DialogTitle>
+            <DialogContent
+              sx={{
+                display: "grid",
+                placeItems: "center",
+                minHeight: 0,
+                p: { xs: 1, sm: 3 },
+                bgcolor: "background.default",
+              }}
+            >
+              <Box
+                component="img"
+                src={previewImage.url}
+                alt={previewImage.name}
+                sx={{
+                  display: "block",
+                  maxWidth: "100%",
+                  maxHeight: "calc(100dvh - 100px)",
+                  objectFit: "contain",
+                }}
+              />
+            </DialogContent>
+          </>
+        ) : (
+          <>
+            <DialogTitle
+              id={dialogTitleId}
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 2,
+              }}
+            >
+              <Box>
+                <Typography component="h2" variant="h6" fontWeight={700}>
+                  Announcement
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {formatDate(announcement.date_created)}
+                </Typography>
+              </Box>
+              <IconButton onClick={closeDetails} aria-label="Close announcement">
+                <CloseIcon />
+              </IconButton>
+            </DialogTitle>
+            <DialogContent dividers>
+              <Typography
+                component="p"
+                sx={{
+                  m: 0,
+                  whiteSpace: "pre-wrap",
+                  overflowWrap: "anywhere",
+                  lineHeight: 1.7,
+                }}
+              >
+                {announcement.announcement_body}
+              </Typography>
+
+              {announcementLink && (
+                <MuiLink
+                  href={announcementLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  sx={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 0.75,
+                    mt: 2,
+                    overflowWrap: "anywhere",
+                  }}
+                >
+                  {announcement.link}
+                  <LaunchIcon fontSize="small" />
+                </MuiLink>
+              )}
+
+              {imageNames.length > 0 && (
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: {
+                      xs: "1fr",
+                      sm: "repeat(2, minmax(0, 1fr))",
+                    },
+                    gap: 2,
+                    mt: 3,
+                  }}
+                >
+                  {imageNames.map((image, index) => {
+                    const imageUrl = `${imageBaseUrl}/${encodeURIComponent(image)}`;
+                    const imageName = `Announcement image ${index + 1}`;
+                    return (
+                      <ButtonBase
+                        key={image}
+                        aria-label={`View ${imageName}`}
+                        onClick={() =>
+                          setPreviewImage({ url: imageUrl, name: imageName })
+                        }
+                        sx={{
+                          width: "100%",
+                          minHeight: 44,
+                          aspectRatio: "4 / 3",
+                          overflow: "hidden",
+                          borderRadius: 2,
+                          bgcolor: "action.hover",
+                          "&:focus-visible": {
+                            outline: "3px solid",
+                            outlineColor: "primary.main",
+                          },
+                        }}
+                      >
+                        <Box
+                          component="img"
+                          src={imageUrl}
+                          alt={imageName}
+                          onError={(event) => {
+                            event.currentTarget.style.display = "none";
+                          }}
+                          sx={{
+                            display: "block",
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "contain",
+                          }}
+                        />
+                      </ButtonBase>
+                    );
+                  })}
+                </Box>
+              )}
+            </DialogContent>
+          </>
+        )}
+      </Dialog>
     </Card>
   );
 }

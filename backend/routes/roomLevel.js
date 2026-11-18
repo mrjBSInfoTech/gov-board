@@ -5,6 +5,7 @@ import {
   getRoomLevel,
   getRoomQuests,
 } from "../utils/shared/roomLevelService.js";
+import { getAdminRoomAccess } from "../utils/shared/adminRoomAccess.js";
 import { hasRoomMembership } from "../utils/shared/roomMembership.js";
 
 const router = express.Router();
@@ -60,10 +61,36 @@ const requireRoomMember = async (req, res, next) => {
   }
 };
 
+const requireRoomLevelAccess = async (req, res, next) => {
+  const adminId = Number(req.user.admin_id || 0);
+  if (!adminId) return requireRoomMember(req, res, next);
+
+  const roomId = Number(req.params.roomId);
+  if (!Number.isSafeInteger(roomId) || roomId < 1) {
+    return res.status(400).json({ message: "A valid room is required." });
+  }
+
+  try {
+    if (!(await getAdminRoomAccess(db, adminId, roomId))) {
+      return res
+        .status(404)
+        .json({ message: "Room not found or inaccessible." });
+    }
+
+    req.roomId = roomId;
+    return next();
+  } catch (error) {
+    console.error("Room level admin access lookup error:", error);
+    return res
+      .status(500)
+      .json({ message: "Unable to verify room access." });
+  }
+};
+
 router.get(
   "/:roomId/level",
   authenticateRoomUser,
-  requireRoomMember,
+  requireRoomLevelAccess,
   async (req, res) => {
     try {
       res.json(await getRoomLevel(req.roomId));

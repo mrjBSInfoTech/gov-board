@@ -42,6 +42,27 @@ export const fetchRoomMessages = async (roomId) => {
   }
 };
 
+export const toggleRoomMessageReaction = async (roomId, messageId, emoji) => {
+  try {
+    const response = await api.post(
+      `/${roomId}/messages/${messageId}/reactions`,
+      { emoji },
+    );
+    return response.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+
+export const deleteRoomMessage = async (roomId, messageId) => {
+  try {
+    const response = await api.delete(`/${roomId}/messages/${messageId}`);
+    return response.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+
 export const fetchRoomMembers = async (roomId) => {
   try {
     const response = await api.get(`/${roomId}/members`);
@@ -165,11 +186,10 @@ export const fetchRoomLevel = async (roomId) => {
   }
 };
 
-export const sendRoomMessage = async (roomId, message, senderName, media) => {
+export const sendRoomMessage = async (roomId, message, media) => {
   try {
     const formData = new FormData();
     formData.append("message", message);
-    formData.append("sender_name", senderName);
     if (media) formData.append("media", media);
 
     const response = await api.post(`/${roomId}/messages`, formData);

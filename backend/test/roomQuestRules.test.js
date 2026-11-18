@@ -26,25 +26,57 @@ test("room level costs follow the Fibonacci-style progression", () => {
     current_level_exp: 0,
     next_level_exp: 100,
     next_level_total_exp: 100,
+    max_level_reached: false,
+    reactions_unlocked: false,
   });
   assert.deepEqual(getRoomLevelProgress(100), {
     level: 2,
     current_level_exp: 0,
     next_level_exp: 100,
     next_level_total_exp: 200,
+    max_level_reached: false,
+    reactions_unlocked: false,
   });
   assert.deepEqual(getRoomLevelProgress(250), {
     level: 3,
     current_level_exp: 50,
     next_level_exp: 200,
     next_level_total_exp: 400,
+    max_level_reached: false,
+    reactions_unlocked: false,
   });
   assert.deepEqual(getRoomLevelProgress(700), {
     level: 5,
     current_level_exp: 0,
     next_level_exp: 500,
     next_level_total_exp: 1200,
+    max_level_reached: false,
+    reactions_unlocked: true,
   });
+});
+
+test("room level caps at 20 while EXP continues accumulating", () => {
+  assert.equal(getRoomLevelProgress(400).reactions_unlocked, false);
+  assert.equal(getRoomLevelProgress(700).reactions_unlocked, true);
+
+  let progress = getRoomLevelProgress(0);
+  let totalExp = 0;
+
+  while (progress.level < 20) {
+    totalExp = progress.next_level_total_exp;
+    progress = getRoomLevelProgress(totalExp);
+  }
+
+  assert.equal(progress.level, 20);
+  assert.equal(progress.max_level_reached, true);
+  assert.equal(progress.current_level_exp, progress.next_level_exp);
+
+  const beyondCap = getRoomLevelProgress(
+    totalExp + progress.next_level_exp * 10,
+  );
+  assert.equal(beyondCap.level, 20);
+  assert.equal(beyondCap.max_level_reached, true);
+  assert.equal(beyondCap.reactions_unlocked, true);
 });
 
 test("room membership is isolated by room for both members", async () => {

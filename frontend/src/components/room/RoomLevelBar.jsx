@@ -72,10 +72,12 @@ export default function RoomLevelBar({ roomId, roomName }) {
 
   if (!level) return null;
 
-  const progress = Math.min(
-    100,
-    (level.current_level_exp / level.next_level_exp) * 100,
-  );
+  const progress = level.max_level_reached
+    ? 100
+    : Math.min(
+        100,
+        (level.current_level_exp / level.next_level_exp) * 100,
+      );
 
   return (
     <Paper
@@ -111,7 +113,9 @@ export default function RoomLevelBar({ roomId, roomName }) {
         sx={{ height: 10, borderRadius: 5 }}
       />
       <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-        {level.current_level_exp} / {level.next_level_exp} EXP to next level
+        {level.max_level_reached
+          ? "Maximum room level reached"
+          : `${level.current_level_exp} / ${level.next_level_exp} EXP to next level`}
       </Typography>
     </Paper>
   );

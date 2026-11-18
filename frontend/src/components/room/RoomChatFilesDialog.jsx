@@ -21,12 +21,17 @@ import {
   Typography,
 } from "@mui/material";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
+import AddReactionOutlinedIcon from "@mui/icons-material/AddReactionOutlined";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import CloseIcon from "@mui/icons-material/Close";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
 import LinkIcon from "@mui/icons-material/Link";
 import SendIcon from "@mui/icons-material/Send";
+import VisibilityOffOutlinedIcon from "@mui/icons-material/VisibilityOffOutlined";
 import { API_BASE_URL } from "../../api/apiBaseURL";
+
+const ROOM_CHAT_REACTIONS = ["👍", "❤️", "😂", "😮", "😢"];
 
 const formatFileSize = (bytes) => {
   if (!Number.isFinite(bytes)) return "";
@@ -50,12 +55,20 @@ export default function RoomChatFilesDialog({
   onMediaChange,
   onSend,
   sending,
+  onReact,
+  reactingMessageId,
+  canReact,
+  reactionAvailabilityError,
+  onDelete,
+  deletingMessageId,
   error,
   onClearError,
 }) {
   const messagesEndRef = useRef(null);
   const mediaInputRef = useRef(null);
   const [previewImage, setPreviewImage] = useState(null);
+  const [reactionPickerMessageId, setReactionPickerMessageId] = useState(null);
+  const [confirmDeleteMessageId, setConfirmDeleteMessageId] = useState(null);
 
   useEffect(() => {
     if (open && tab === 0) {
@@ -125,6 +138,12 @@ export default function RoomChatFilesDialog({
                 {error}
               </Alert>
             )}
+            {tab === 0 && reactionAvailabilityError && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                Reactions are unavailable because the room level could not be
+                verified.
+              </Alert>
+            )}
 
             {tab === 0 && (
               <Box>
@@ -156,100 +175,294 @@ export default function RoomChatFilesDialog({
                     </Box>
                   ) : (
                     <List disablePadding>
-                      {messages.map((item) => (
+                      {messages.map((item) => {
+                        const isMine = Boolean(item.is_mine);
+                        return (
                         <ListItem
                           key={item.message_id}
-                          alignItems="flex-start"
                           disableGutters
-                          sx={{ py: 1 }}
+                          sx={{
+                            display: "flex",
+                            justifyContent: isMine ? "flex-end" : "flex-start",
+                            py: 1,
+                          }}
                         >
-                          <ListItemText
-                            primary={
-                              <Typography fontWeight={700}>
-                                {item.sender_name || "Room member"}
+                          <Paper
+                            variant="outlined"
+                            sx={{
+                              width: "fit-content",
+                              maxWidth: { xs: "94%", sm: "82%" },
+                              minWidth: 120,
+                              p: 1.5,
+                              borderRadius: isMine
+                                ? "16px 16px 4px 16px"
+                                : "16px 16px 16px 4px",
+                              bgcolor: isMine
+                                ? "action.selected"
+                                : "background.paper",
+                              borderColor: isMine ? "primary.main" : "divider",
+                              overflowWrap: "anywhere",
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "flex-start",
+                                justifyContent: "space-between",
+                                gap: 1,
+                              }}
+                            >
+                              <Typography
+                                fontWeight={700}
+                                sx={{ minWidth: 0, overflowWrap: "anywhere" }}
+                              >
+                                {item.sender_name || "Unknown sender"}
+                                {item.sender_position
+                                  ? ` (${item.sender_position})`
+                                  : ""}
                               </Typography>
-                            }
-                            secondary={
-                              <>
-                                {item.media_url && item.media_type === "image" && (
-                                  <Box
-                                    component="button"
-                                    type="button"
-                                    onClick={() =>
-                                      setPreviewImage({
-                                        url: `${API_BASE_URL}${item.media_url}`,
-                                        name: item.media_name || "Chat image",
-                                      })
-                                    }
-                                    aria-label={`Enlarge ${item.media_name || "chat image"}`}
-                                    sx={{
-                                      display: "block",
-                                      border: 0,
-                                      p: 0,
-                                      bgcolor: "transparent",
-                                      cursor: "zoom-in",
-                                    }}
-                                  >
-                                    <Box
-                                      component="img"
-                                      src={`${API_BASE_URL}${item.media_url}`}
-                                      alt={item.media_name || "Image shared in chat"}
-                                      sx={{
-                                        display: "block",
-                                        maxWidth: "100%",
-                                        maxHeight: 260,
-                                        borderRadius: 2,
-                                        my: 1,
-                                      }}
-                                    />
-                                  </Box>
+                              <IconButton
+                                aria-label={
+                                  isMine
+                                    ? "Delete message for everyone"
+                                    : "Hide message for me"
+                                }
+                                title={
+                                  isMine
+                                    ? "Delete for everyone"
+                                    : "Hide for me"
+                                }
+                                disabled={deletingMessageId === item.message_id}
+                                onClick={() =>
+                                  setConfirmDeleteMessageId(item.message_id)
+                                }
+                                sx={{ mt: -1, mr: -1, flexShrink: 0 }}
+                              >
+                                {isMine ? (
+                                  <DeleteOutlineIcon />
+                                ) : (
+                                  <VisibilityOffOutlinedIcon />
                                 )}
-                                {item.media_url && item.media_type === "file" && (
+                              </IconButton>
+                            </Box>
+
+                            {item.media_url && item.media_type === "image" && (
+                              <Box
+                                component="button"
+                                type="button"
+                                onClick={() =>
+                                  setPreviewImage({
+                                    url: `${API_BASE_URL}${item.media_url}`,
+                                    name: item.media_name || "Chat image",
+                                  })
+                                }
+                                aria-label={`Enlarge ${item.media_name || "chat image"}`}
+                                sx={{
+                                  display: "block",
+                                  border: 0,
+                                  p: 0,
+                                  bgcolor: "transparent",
+                                  cursor: "zoom-in",
+                                }}
+                              >
+                                <Box
+                                  component="img"
+                                  src={`${API_BASE_URL}${item.media_url}`}
+                                  alt={item.media_name || "Image shared in chat"}
+                                  sx={{
+                                    display: "block",
+                                    maxWidth: "100%",
+                                    maxHeight: 260,
+                                    borderRadius: 2,
+                                    my: 1,
+                                  }}
+                                />
+                              </Box>
+                            )}
+                            {item.media_url && item.media_type === "file" && (
+                              <Button
+                                component="a"
+                                href={`${API_BASE_URL}${item.media_url}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                startIcon={<InsertDriveFileOutlinedIcon />}
+                                size="small"
+                                sx={{ my: 1 }}
+                              >
+                                {item.media_name || "Open attachment"}
+                              </Button>
+                            )}
+                            {item.media_url && item.media_type === "video" && (
+                              <Box
+                                component="video"
+                                src={`${API_BASE_URL}${item.media_url}`}
+                                controls
+                                preload="metadata"
+                                sx={{
+                                  display: "block",
+                                  width: "100%",
+                                  maxHeight: 280,
+                                  borderRadius: 2,
+                                  my: 1,
+                                  bgcolor: "common.black",
+                                }}
+                              />
+                            )}
+                            {item.message && (
+                              <Typography
+                                component="p"
+                                color="text.primary"
+                                sx={{ my: item.media_url ? 0.5 : 0 }}
+                              >
+                                {item.message}
+                              </Typography>
+                            )}
+                            <Typography
+                              component="div"
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ mt: 0.5 }}
+                            >
+                              {new Date(item.date_created).toLocaleString()}
+                            </Typography>
+
+                            {canReact && (
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  flexWrap: "wrap",
+                                  gap: 0.5,
+                                  mt: 1,
+                                }}
+                              >
+                                {(item.reactions || []).map((reaction) => (
                                   <Button
-                                    component="a"
-                                    href={`${API_BASE_URL}${item.media_url}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    startIcon={<InsertDriveFileOutlinedIcon />}
-                                    size="small"
-                                    sx={{ my: 1 }}
-                                  >
-                                    {item.media_name || "Open attachment"}
-                                  </Button>
-                                )}
-                                {item.media_url && item.media_type === "video" && (
-                                  <Box
-                                    component="video"
-                                    src={`${API_BASE_URL}${item.media_url}`}
-                                    controls
-                                    preload="metadata"
+                                    key={reaction.emoji}
+                                    type="button"
+                                    variant={
+                                      reaction.reacted_by_me
+                                        ? "contained"
+                                        : "outlined"
+                                    }
+                                    aria-label={`${reaction.emoji}, ${reaction.count} reactions`}
+                                    aria-pressed={reaction.reacted_by_me}
+                                    disabled={
+                                      reactingMessageId === item.message_id
+                                    }
+                                    onClick={() =>
+                                      onReact(item.message_id, reaction.emoji)
+                                    }
                                     sx={{
-                                      display: "block",
-                                      width: "100%",
-                                      maxHeight: 280,
-                                      borderRadius: 2,
-                                      my: 1,
-                                      bgcolor: "common.black",
+                                      minWidth: 44,
+                                      minHeight: 44,
+                                      px: 1,
                                     }}
-                                  />
-                                )}
-                                {item.message && (
-                                  <Typography
-                                    component="span"
-                                    color="text.primary"
                                   >
-                                    {item.message}
-                                  </Typography>
-                                )}
-                                <br />
-                                <Typography component="span" variant="caption">
-                                  {new Date(item.date_created).toLocaleString()}
+                                    {reaction.emoji} {reaction.count}
+                                  </Button>
+                                ))}
+                                <IconButton
+                                  aria-label="Add a reaction"
+                                  aria-expanded={
+                                    reactionPickerMessageId === item.message_id
+                                  }
+                                  disabled={
+                                    reactingMessageId === item.message_id
+                                  }
+                                  onClick={() =>
+                                    setReactionPickerMessageId((current) =>
+                                      current === item.message_id
+                                        ? null
+                                        : item.message_id,
+                                    )
+                                  }
+                                >
+                                  <AddReactionOutlinedIcon />
+                                </IconButton>
+                              </Box>
+                            )}
+
+                            {canReact &&
+                              reactionPickerMessageId === item.message_id && (
+                                <Box
+                                  role="group"
+                                  aria-label="Choose a reaction"
+                                  sx={{
+                                    display: "flex",
+                                    flexWrap: "wrap",
+                                    gap: 0.5,
+                                    mt: 0.5,
+                                  }}
+                                >
+                                  {ROOM_CHAT_REACTIONS.map((emoji) => (
+                                    <Button
+                                      key={emoji}
+                                      type="button"
+                                      aria-label={`React with ${emoji}`}
+                                      disabled={
+                                        reactingMessageId === item.message_id
+                                      }
+                                      onClick={() => {
+                                        setReactionPickerMessageId(null);
+                                        void onReact(item.message_id, emoji);
+                                      }}
+                                      sx={{ minWidth: 44, minHeight: 44 }}
+                                    >
+                                      {emoji}
+                                    </Button>
+                                  ))}
+                                </Box>
+                              )}
+
+                            {confirmDeleteMessageId === item.message_id && (
+                              <Box
+                                role="group"
+                                aria-label="Confirm message deletion"
+                                sx={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  flexWrap: "wrap",
+                                  gap: 0.5,
+                                  mt: 1,
+                                }}
+                              >
+                                <Typography
+                                  variant="caption"
+                                  sx={{ flexBasis: "100%" }}
+                                >
+                                  {isMine
+                                    ? "Delete this message for everyone?"
+                                    : "Hide this message from your view? Other members can still see it."}
                                 </Typography>
-                              </>
-                            }
-                          />
+                                <Button
+                                  type="button"
+                                  onClick={() =>
+                                    setConfirmDeleteMessageId(null)
+                                  }
+                                  sx={{ minHeight: 44 }}
+                                >
+                                  Cancel
+                                </Button>
+                                <Button
+                                  type="button"
+                                  color={isMine ? "error" : "primary"}
+                                  disabled={
+                                    deletingMessageId === item.message_id
+                                  }
+                                  onClick={() => {
+                                    setConfirmDeleteMessageId(null);
+                                    void onDelete(item.message_id);
+                                  }}
+                                  sx={{ minHeight: 44 }}
+                                >
+                                  {isMine ? "Delete for everyone" : "Hide for me"}
+                                </Button>
+                              </Box>
+                            )}
+                          </Paper>
                         </ListItem>
-                      ))}
+                      )})}
                       <Box ref={messagesEndRef} />
                     </List>
                   )}

@@ -76,7 +76,9 @@ export default function Quest() {
 
   const level = questData?.room_level;
   const progress = level
-    ? Math.min(100, (level.current_level_exp / level.next_level_exp) * 100)
+    ? level.max_level_reached
+      ? 100
+      : Math.min(100, (level.current_level_exp / level.next_level_exp) * 100)
     : 0;
 
   return (
@@ -142,8 +144,9 @@ export default function Quest() {
               sx={{ height: 10, borderRadius: 5 }}
             />
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              {level.current_level_exp} / {level.next_level_exp} EXP to the next
-              level
+              {level.max_level_reached
+                ? "Maximum room level reached"
+                : `${level.current_level_exp} / ${level.next_level_exp} EXP to the next level`}
             </Typography>
           </Paper>
 

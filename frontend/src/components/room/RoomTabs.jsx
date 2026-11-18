@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  deleteRoomMessage,
   fetchRoomMembers,
+  fetchRoomLevel,
   fetchRoomMessages,
   sendRoomMessage,
+  toggleRoomMessageReaction,
 } from "../../api/roomAPI";
 import RoomChatFilesDialog from "./RoomChatFilesDialog";
 import RoomMembersDialog from "./RoomMembersDialog";
@@ -26,20 +29,6 @@ const CHAT_MEDIA_EXTENSIONS = new Set([
   "odt", "ods", "odp", "rtf", "txt", "csv", "zip",
 ]);
 
-function getCurrentUserName() {
-  const firstName =
-    localStorage.getItem("officer_first_name") ||
-    localStorage.getItem("student_first_name") ||
-    localStorage.getItem("admin_first_name") ||
-    "";
-  const lastName =
-    localStorage.getItem("officer_last_name") ||
-    localStorage.getItem("student_last_name") ||
-    localStorage.getItem("admin_last_name") ||
-    "";
-  return `${firstName} ${lastName}`.trim() || "Room member";
-}
-
 export default function RoomTabs({
   announcements,
   roomId,
@@ -53,12 +42,16 @@ export default function RoomTabs({
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [tab, setTab] = useState(0);
   const [messages, setMessages] = useState([]);
+  const [roomLevel, setRoomLevel] = useState(null);
+  const [roomLevelError, setRoomLevelError] = useState("");
   const [members, setMembers] = useState([]);
   const [message, setMessage] = useState("");
   const [chatMedia, setChatMedia] = useState(null);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [sending, setSending] = useState(false);
+  const [reactingMessageId, setReactingMessageId] = useState(null);
+  const [deletingMessageId, setDeletingMessageId] = useState(null);
   const [error, setError] = useState("");
   const [selectedMember, setSelectedMember] = useState(null);
   const [promotePosition, setPromotePosition] = useState("");
@@ -66,24 +59,36 @@ export default function RoomTabs({
   const [promoteError, setPromoteError] = useState("");
   const [requiresConfirmation, setRequiresConfirmation] = useState(false);
   const [demoteDialogOpen, setDemoteDialogOpen] = useState(false);
+  const messageLoadSequence = useRef(0);
+  const canReact =
+    Number(roomLevel?.room_id) === Number(roomId) &&
+    Boolean(roomLevel?.reactions_unlocked);
 
   const loadMessages = useCallback(
     async (showLoading = false) => {
       if (!roomId) return;
 
+      const requestSequence = ++messageLoadSequence.current;
       if (showLoading) setLoadingMessages(true);
       try {
-        setMessages(await fetchRoomMessages(roomId));
-        setError((currentError) =>
-          currentError === "Internal server error" ||
-          currentError === "Unable to load room messages"
-            ? ""
-            : currentError,
-        );
+        const nextMessages = await fetchRoomMessages(roomId);
+        if (requestSequence === messageLoadSequence.current) {
+          setMessages(nextMessages);
+          setError((currentError) =>
+            currentError === "Internal server error" ||
+            currentError === "Unable to load room messages"
+              ? ""
+              : currentError,
+          );
+        }
       } catch (err) {
-        setError(err.message || "Unable to load room messages.");
+        if (requestSequence === messageLoadSequence.current) {
+          setError(err.message || "Unable to load room messages.");
+        }
       } finally {
-        if (showLoading) setLoadingMessages(false);
+        if (requestSequence === messageLoadSequence.current) {
+          setLoadingMessages(false);
+        }
       }
     },
     [roomId],
@@ -105,6 +110,45 @@ export default function RoomTabs({
     void loadMessages(true);
     loadMembers();
   }, [loadMembers, loadMessages, roomId]);
+
+  useEffect(() => {
+    if (!roomId) return undefined;
+
+    let active = true;
+    const loadLevel = async () => {
+      try {
+        const nextLevel = await fetchRoomLevel(roomId);
+        if (active) {
+          setRoomLevel(nextLevel);
+          setRoomLevelError("");
+        }
+      } catch (loadError) {
+        if (active) {
+          console.error("Unable to load room level for chat:", loadError);
+          setRoomLevel(null);
+          setRoomLevelError(
+            loadError.message || "Unable to verify the room level.",
+          );
+        }
+      }
+    };
+
+    setRoomLevel(null);
+    setRoomLevelError("");
+    void loadLevel();
+
+    const handleRoomXpUpdated = (event) => {
+      if (Number(event.detail?.roomId) === Number(roomId)) {
+        void loadLevel();
+      }
+    };
+    window.addEventListener("room-xp-updated", handleRoomXpUpdated);
+
+    return () => {
+      active = false;
+      window.removeEventListener("room-xp-updated", handleRoomXpUpdated);
+    };
+  }, [roomId]);
 
   useEffect(() => {
     if (!roomId || !chatFilesOpen) return undefined;
@@ -198,7 +242,6 @@ export default function RoomTabs({
       const createdMessage = await sendRoomMessage(
         roomId,
         trimmedMessage,
-        getCurrentUserName(),
         chatMedia,
       );
       setMessages((currentMessages) => [...currentMessages, createdMessage]);
@@ -208,6 +251,39 @@ export default function RoomTabs({
       setError(err.message);
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleReactToMessage = async (messageId, emoji) => {
+    if (!roomId || reactingMessageId !== null) return;
+
+    setReactingMessageId(messageId);
+    setError("");
+    try {
+      await toggleRoomMessageReaction(roomId, messageId, emoji);
+      await loadMessages();
+    } catch (err) {
+      setError(err.message || "Unable to update message reaction.");
+    } finally {
+      setReactingMessageId(null);
+    }
+  };
+
+  const handleDeleteMessage = async (messageId) => {
+    if (!roomId || deletingMessageId !== null) return;
+
+    setDeletingMessageId(messageId);
+    setError("");
+    try {
+      await deleteRoomMessage(roomId, messageId);
+      setMessages((currentMessages) =>
+        currentMessages.filter((item) => item.message_id !== messageId),
+      );
+      await loadMessages();
+    } catch (err) {
+      setError(err.message || "Unable to delete message.");
+    } finally {
+      setDeletingMessageId(null);
     }
   };
 
@@ -332,6 +408,12 @@ export default function RoomTabs({
         onMediaChange={handleChatMediaChange}
         onSend={handleSend}
         sending={sending}
+        onReact={handleReactToMessage}
+        reactingMessageId={reactingMessageId}
+        canReact={canReact}
+        reactionAvailabilityError={roomLevelError}
+        onDelete={handleDeleteMessage}
+        deletingMessageId={deletingMessageId}
         error={error}
         onClearError={clearError}
       />

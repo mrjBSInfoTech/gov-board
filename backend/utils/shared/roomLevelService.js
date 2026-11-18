@@ -76,15 +76,25 @@ export async function awardLoginXp(memberId) {
 export async function getRoomLevel(roomId) {
   await ensureRoomLevel(roomId);
   const [rows] = await db.promise().query(
-    "SELECT room_id, total_exp FROM room_level WHERE room_id = ?",
+    "SELECT room_id, total_exp, level FROM room_level WHERE room_id = ?",
     [roomId],
   );
 
   if (!rows.length) return null;
+  const progress = getRoomLevelProgress(rows[0].total_exp);
+  if (Number(rows[0].level) !== progress.level) {
+    await db.promise().query(
+      `UPDATE room_level
+          SET level = ?
+        WHERE room_id = ? AND total_exp = ?`,
+      [progress.level, roomId, rows[0].total_exp],
+    );
+  }
+
   return {
     room_id: rows[0].room_id,
     total_exp: Number(rows[0].total_exp),
-    ...getRoomLevelProgress(rows[0].total_exp),
+    ...progress,
   };
 }
 

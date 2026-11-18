@@ -7,15 +7,27 @@ import path from "path";
 import { fileURLToPath } from "url";
 import db from "../database/db.js";
 import { isRoomMember } from "../utils/shared/roomMembership.js";
-import { awardRoomXp } from "../utils/shared/roomLevelService.js";
+import {
+  awardRoomXp,
+  getRoomLevel,
+} from "../utils/shared/roomLevelService.js";
 import { getAdminRoomAccess } from "../utils/shared/adminRoomAccess.js";
 import { findRoomByCode } from "../utils/shared/roomJoin.js";
 import { canReviewRoomJoinRequests } from "../utils/shared/roomJoinRequestAccess.js";
+import { getRoomSenderName } from "../utils/shared/roomSenderName.js";
+import {
+  getRoomChatActorType,
+  getRoomMessageDeleteScope,
+  getRoomMessageReactions,
+  ROOM_CHAT_REACTIONS,
+  toggleRoomMessageReaction,
+} from "../utils/shared/roomChatActions.js";
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const chatUploadDir = path.join(__dirname, "..", "uploads", "room-chat");
+const roomChatReactionSet = new Set(ROOM_CHAT_REACTIONS);
 const allowedMediaExtensions = new Set([
   ".jpg",
   ".jpeg",
@@ -99,6 +111,19 @@ const removeUploadedMedia = (file) => {
   if (!file) return;
   fs.unlink(file.path, (error) => {
     if (error) console.error("Unable to remove rejected chat upload:", error);
+  });
+};
+
+const removeStoredChatMedia = (filename) => {
+  if (!filename) return;
+  if (path.basename(filename) !== filename) {
+    console.error("Unable to remove room chat media with an invalid filename.");
+    return;
+  }
+  fs.unlink(path.join(chatUploadDir, filename), (error) => {
+    if (error && error.code !== "ENOENT") {
+      console.error("Unable to remove deleted room chat media:", error);
+    }
   });
 };
 
@@ -508,27 +533,84 @@ router.get(
   "/:roomId/messages",
   authenticateRoomUser,
   authorizeRoomMember,
-  (req, res) => {
-    db.query(
-      `SELECT message_id, room_id, sender_name, message,
-              media_filename, media_name, media_type, date_created
-       FROM room_message WHERE room_id = ? ORDER BY date_created ASC, message_id ASC`,
-      [req.roomId],
-      (err, results) => {
-        if (err) {
-          console.error("Room message read error:", err);
-          return res.status(500).json({ error: "Unable to load room messages" });
-        }
-        res.json(
-          results.map(({ media_filename, ...item }) => ({
-            ...item,
-            media_url: media_filename
-              ? getRoomMediaUrl(req, item.message_id)
-              : null,
-          })),
-        );
-      },
-    );
+  async (req, res) => {
+    const actorType = getRoomChatActorType(req.roomMemberType);
+    try {
+      const [results] = await db.promise().query(
+        `SELECT m.message_id, m.room_id,
+              COALESCE(
+                NULLIF(CONCAT_WS(' ', NULLIF(TRIM(a.first_name), ''), NULLIF(TRIM(a.last_name), '')), ''),
+                NULLIF(CONCAT_WS(' ', NULLIF(TRIM(s.first_name), ''), NULLIF(TRIM(s.last_name), '')), ''),
+                m.sender_name
+              ) AS sender_name,
+              CASE
+                WHEN m.sender_type = 'admin' THEN 'Admin'
+                ELSE COALESCE(
+                  (
+                    SELECT NULLIF(TRIM(rm.position), '')
+                    FROM room_member rm
+                    WHERE rm.room_id = m.room_id
+                      AND rm.member_id = m.sender_id
+                      AND rm.member_type = m.sender_type
+                    LIMIT 1
+                  ),
+                  CASE WHEN m.sender_type = 'officer' THEN 'Officer' ELSE 'Student' END
+                )
+              END AS sender_position,
+              CASE
+                WHEN m.sender_id = ?
+                  AND (
+                    (m.sender_type = 'admin' AND ? = 'admin')
+                    OR (m.sender_type IN ('officer', 'student') AND ? = 'member')
+                  )
+                  THEN 1
+                ELSE 0
+              END AS is_mine,
+              m.message, m.media_filename, m.media_name, m.media_type, m.date_created
+       FROM room_message m
+       LEFT JOIN admin a
+         ON m.sender_type = 'admin' AND m.sender_id = a.admin_id
+       LEFT JOIN student s
+         ON m.sender_type IN ('officer', 'student') AND m.sender_id = s.student_id
+       LEFT JOIN room_message_hidden h
+         ON h.room_id = m.room_id
+        AND h.message_id = m.message_id
+        AND h.member_type = ?
+        AND h.member_id = ?
+       WHERE m.room_id = ? AND h.message_id IS NULL
+       ORDER BY m.date_created ASC, m.message_id ASC`,
+        [
+          req.roomMemberId,
+          actorType,
+          actorType,
+          actorType,
+          req.roomMemberId,
+          req.roomId,
+        ],
+      );
+      if (!results.length) return res.json([]);
+
+      const messageIds = results.map((item) => item.message_id);
+      const reactionsByMessage = await getRoomMessageReactions(
+        db.promise(),
+        req.roomId,
+        messageIds,
+        { id: req.roomMemberId, type: req.roomMemberType },
+      );
+      return res.json(
+        results.map(({ media_filename, is_mine, ...item }) => ({
+          ...item,
+          is_mine: Boolean(is_mine),
+          reactions: reactionsByMessage.get(Number(item.message_id)) || [],
+          media_url: media_filename
+            ? getRoomMediaUrl(req, item.message_id)
+            : null,
+        })),
+      );
+    } catch (error) {
+      console.error("Room message read error:", error);
+      return res.status(500).json({ error: "Unable to load room messages" });
+    }
   },
 );
 
@@ -602,16 +684,150 @@ router.get(
   },
 );
 
+router.delete(
+  "/:roomId/messages/:messageId",
+  authenticateRoomUser,
+  authorizeRoomMember,
+  async (req, res) => {
+    const messageId = Number(req.params.messageId);
+    if (!Number.isSafeInteger(messageId) || messageId < 1) {
+      return res.status(400).json({ error: "A valid message is required." });
+    }
+
+    try {
+      const [messages] = await db.promise().query(
+        `SELECT room_id, sender_id, sender_type, media_filename
+         FROM room_message
+         WHERE room_id = ? AND message_id = ?
+         LIMIT 1`,
+        [req.roomId, messageId],
+      );
+      if (!messages.length) {
+        return res.status(404).json({ error: "Room message not found." });
+      }
+
+      const message = messages[0];
+      const actorType = getRoomChatActorType(req.roomMemberType);
+      const scope = getRoomMessageDeleteScope(message, req.roomId, {
+        id: req.roomMemberId,
+        type: req.roomMemberType,
+      });
+      if (!scope) {
+        return res.status(404).json({ error: "Room message not found." });
+      }
+
+      if (scope === "everyone") {
+        const [result] = await db.promise().query(
+          `DELETE FROM room_message
+           WHERE room_id = ? AND message_id = ?
+             AND sender_id = ?
+             AND (
+               (sender_type = 'admin' AND ? = 'admin')
+               OR (sender_type IN ('officer', 'student') AND ? = 'member')
+             )`,
+          [
+            req.roomId,
+            messageId,
+            req.roomMemberId,
+            actorType,
+            actorType,
+          ],
+        );
+        if (!result.affectedRows) {
+          return res.status(404).json({ error: "Room message not found." });
+        }
+
+        removeStoredChatMedia(message.media_filename);
+        return res.json({ scope: "everyone" });
+      }
+
+      const [result] = await db.promise().query(
+        `INSERT IGNORE INTO room_message_hidden
+           (room_id, message_id, member_type, member_id)
+         SELECT room_id, message_id, ?, ?
+         FROM room_message
+         WHERE room_id = ? AND message_id = ?`,
+        [
+          actorType,
+          req.roomMemberId,
+          req.roomId,
+          messageId,
+        ],
+      );
+      if (!result.affectedRows) {
+        const [remainingMessages] = await db.promise().query(
+          `SELECT message_id FROM room_message
+           WHERE room_id = ? AND message_id = ? LIMIT 1`,
+          [req.roomId, messageId],
+        );
+        if (!remainingMessages.length) {
+          return res.status(404).json({ error: "Room message not found." });
+        }
+      }
+
+      return res.json({ scope: "member" });
+    } catch (error) {
+      console.error("Room message delete error:", error);
+      return res.status(500).json({ error: "Unable to delete room message." });
+    }
+  },
+);
+
+router.post(
+  "/:roomId/messages/:messageId/reactions",
+  authenticateRoomUser,
+  authorizeRoomMember,
+  requireRoomMemberNotMuted,
+  async (req, res) => {
+    const messageId = Number(req.params.messageId);
+    const { emoji } = req.body || {};
+    if (!Number.isSafeInteger(messageId) || messageId < 1) {
+      return res.status(400).json({ error: "A valid message is required." });
+    }
+    if (!roomChatReactionSet.has(emoji)) {
+      return res.status(400).json({ error: "This room chat reaction is not supported." });
+    }
+
+    try {
+      const roomLevel = await getRoomLevel(req.roomId);
+      if (!roomLevel.reactions_unlocked) {
+        return res.status(403).json({
+          error: "Room message reactions are available from level 5.",
+        });
+      }
+
+      const reaction = await toggleRoomMessageReaction(
+        db.promise(),
+        req.roomId,
+        messageId,
+        { id: req.roomMemberId, type: req.roomMemberType },
+        emoji,
+      );
+      if (!reaction) {
+        return res.status(404).json({ error: "Room message not found." });
+      }
+      return res.json({
+        message_id: messageId,
+        active_emoji: reaction.activeEmoji,
+      });
+    } catch (error) {
+      console.error("Room message reaction write error:", error);
+      return res.status(500).json({
+        error: "Unable to update room message reaction.",
+      });
+    }
+  },
+);
+
 router.post(
   "/:roomId/messages",
   authenticateRoomUser,
   authorizeRoomMember,
   requireRoomMemberNotMuted,
   uploadChatMedia,
-  (req, res) => {
+  async (req, res) => {
     const roomId = req.roomId;
     const message = req.body.message?.trim();
-    const senderName = req.body.sender_name?.trim() || "Room member";
     const senderId = req.roomMemberId;
     const senderType = req.roomMemberType;
     if (!message && !req.file) {
@@ -638,6 +854,28 @@ router.post(
           .replace(/[\u0000-\u001f\u007f]/g, "")
           .slice(0, 255)
       : null;
+
+    let senderName;
+    try {
+      senderName = await getRoomSenderName(
+        db.promise(),
+        senderType,
+        senderId,
+      );
+    } catch (error) {
+      removeUploadedMedia(req.file);
+      console.error("Room message sender lookup error:", error);
+      return res.status(500).json({ error: "Unable to verify room sender." });
+    }
+    if (!senderName) {
+      removeUploadedMedia(req.file);
+      return res.status(403).json({ error: "Unable to identify room sender." });
+    }
+    const senderPosition =
+      senderType === "admin"
+        ? "Admin"
+        : req.roomMemberPosition ||
+          (senderType === "officer" ? "Officer" : "Student");
 
     db.query(
       `INSERT INTO room_message
@@ -669,6 +907,9 @@ router.post(
               message_id: result.insertId,
               room_id: roomId,
               sender_name: senderName,
+              sender_position: senderPosition,
+              is_mine: true,
+              reactions: [],
               message: message || "",
               media_url: req.file
                 ? getRoomMediaUrl(req, result.insertId)
