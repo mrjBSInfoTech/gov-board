@@ -1,7 +1,21 @@
 import { useEffect, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import HistoryIcon from "@mui/icons-material/History";
-import { Box, Paper, Stack, Typography } from "@mui/material";
+import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
+import {
+  Alert,
+  Box,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
+  Paper,
+  Radio,
+  RadioGroup,
+  Stack,
+  Typography,
+} from "@mui/material";
 import {
   Button,
   Chip,
@@ -26,6 +40,101 @@ import { fetchAuditLogs } from "../../api/admin/auditLogAPI";
 import { useTheme } from "@mui/material/styles";
 import { formatAuditInformation } from "../../utils/auditDisplay";
 
+const reportHeaders = [
+  "Datetime",
+  "Action",
+  "Actor",
+  "Room ID",
+  "Role",
+  "Status",
+  "Information",
+];
+
+const formatAuditRole = (data) => {
+  if (!data) return "N/A";
+
+  const list = Array.isArray(data)
+    ? data
+    : typeof data === "string"
+      ? data.split(",")
+      : [];
+  const formatted = list
+    .map((item) => {
+      if (typeof item !== "string") return "";
+      const trimmed = item.trim();
+      if (!trimmed) return "";
+      return trimmed
+        .split(" ")
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(" ");
+    })
+    .filter(Boolean);
+
+  return formatted.length > 0 ? formatted.join(", ") : "N/A";
+};
+
+const getReportRows = (logs) =>
+  logs.map((log) => [
+    new Date(log.datetime).toLocaleString(),
+    String(log.action)
+      .replace(/_/g, " ")
+      .toLowerCase()
+      .replace(/\b\w/g, (letter) => letter.toUpperCase()),
+    log.actor ?? "",
+    log.room_id ?? "",
+    formatAuditRole(log.role),
+    String(log.status ?? "")
+      .charAt(0)
+      .toUpperCase() +
+      String(log.status ?? "").slice(1).toLowerCase(),
+    formatAuditInformation(log),
+  ]);
+
+const csvValue = (value) => {
+  const text = value == null ? "" : String(value);
+  const safeText = /^[\t\r ]*[=+\-@]/.test(text) ? `'${text}` : text;
+  return `"${safeText.replace(/"/g, '""')}"`;
+};
+
+const xmlEscape = (value) =>
+  Array.from(String(value ?? ""))
+    .filter((character) => {
+      const codePoint = character.codePointAt(0);
+      return (
+        codePoint === 0x9 ||
+        codePoint === 0xa ||
+        codePoint === 0xd ||
+        (codePoint >= 0x20 && codePoint <= 0xd7ff) ||
+        (codePoint >= 0xe000 && codePoint <= 0xfffd) ||
+        (codePoint >= 0x10000 && codePoint <= 0x10ffff)
+      );
+    })
+    .join("")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+
+const htmlEscape = (value) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const downloadFile = (content, mimeType, filename) => {
+  const url = URL.createObjectURL(new Blob([content], { type: mimeType }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
 export default function Audit() {
   const theme = useTheme();
   const [auditLogs, setAuditLogs] = useState([]);
@@ -35,6 +144,9 @@ export default function Audit() {
   const [date, setDate] = useState(null);
   const [period, setPeriod] = useState("all");
   const [visibleCount, setVisibleCount] = useState(50);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState("csv");
+  const [exportError, setExportError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -64,33 +176,85 @@ export default function Audit() {
     };
   }, [search, date, period]);
 
-  const formatAndCapitalize = (data) => {
-    if (!data) return "N/A";
+  const generateReport = () => {
+    const rows = [reportHeaders, ...getReportRows(auditLogs)];
+    const filename = `admin-audit-${new Date().toISOString().slice(0, 10)}`;
 
-    const list = Array.isArray(data)
-      ? data
-      : typeof data === "string"
-        ? data.split(",")
-        : [];
-
-    if (list.length === 0) return "N/A";
-
-    const formatted = list
-      .map((item) => {
-        if (typeof item !== "string") return "";
-        const trimmed = item.trim();
-        if (!trimmed) return "";
-
-        return trimmed
-          .split(" ")
+    try {
+      if (exportFormat === "csv") {
+        downloadFile(
+          `\uFEFF${rows.map((row) => row.map(csvValue).join(",")).join("\r\n")}`,
+          "text/csv;charset=utf-8",
+          `${filename}.csv`,
+        );
+      } else if (exportFormat === "excel") {
+        const workbookRows = rows
           .map(
-            (word) =>
-              word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(),
+            (row) =>
+              `<Row>${row
+                .map(
+                  (cell) =>
+                    `<Cell><Data ss:Type="String">${xmlEscape(cell)}</Data></Cell>`,
+                )
+                .join("")}</Row>`,
           )
-          .join(" ");
-      })
-      .filter(Boolean);
-    return formatted.length > 0 ? formatted.join(", ") : "N/A";
+          .join("");
+        const workbook = `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+  <Worksheet ss:Name="Admin Audit"><Table>${workbookRows}</Table></Worksheet>
+</Workbook>`;
+        downloadFile(
+          workbook,
+          "application/vnd.ms-excel;charset=utf-8",
+          `${filename}.xls`,
+        );
+      } else {
+        const popup = window.open("", "_blank");
+        if (!popup) {
+          throw new Error(
+            "The PDF window was blocked. Allow pop-ups and try again.",
+          );
+        }
+        popup.opener = null;
+        const tableHeader = `<tr>${rows[0]
+          .map((cell) => `<th>${htmlEscape(cell)}</th>`)
+          .join("")}</tr>`;
+        const tableBody = rows
+          .slice(1)
+          .map(
+            (row) =>
+              `<tr>${row
+                .map((cell) => `<td>${htmlEscape(cell)}</td>`)
+                .join("")}</tr>`,
+          )
+          .join("");
+        popup.document.write(`<!doctype html>
+<html><head><meta charset="utf-8"><title>Admin Audit Report</title>
+<style>
+  body { font: 12px Arial, sans-serif; color: #172033; margin: 24px; }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  p { color: #526078; margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #cbd5e1; padding: 6px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+  th { background: #f1f5f9; }
+  @media print { body { margin: 12mm; } thead { display: table-header-group; } tr { break-inside: avoid; } }
+</style></head><body>
+<h1>Admin Audit Report</h1>
+<p>Generated ${htmlEscape(new Date().toLocaleString())} · ${auditLogs.length} entries</p>
+<table><thead>${tableHeader}</thead><tbody>${tableBody}</tbody></table>
+</body></html>`);
+        popup.document.close();
+        window.setTimeout(() => {
+          popup.focus();
+          popup.print();
+        }, 250);
+      }
+      setExportError("");
+      setExportDialogOpen(false);
+    } catch (reportError) {
+      setExportError(reportError.message || "Unable to generate the report.");
+    }
   };
 
   return (
@@ -267,15 +431,48 @@ export default function Audit() {
             gap: 1,
           }}
         >
-          {!loading && !error && (
-            <Typography
-              sx={{ color: theme.palette.text.secondary, fontSize: 12 }}
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 1,
+              width: "100%",
+            }}
+          >
+            {!loading && !error && (
+              <Typography
+                sx={{ color: theme.palette.text.secondary, fontSize: 12 }}
+              >
+                Showing {Math.min(visibleCount, auditLogs.length)} of{" "}
+                {auditLogs.length} entries
+              </Typography>
+            )}
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<DownloadOutlinedIcon />}
+              onClick={() => {
+                setExportError("");
+                setExportDialogOpen(true);
+              }}
+              disabled={loading || Boolean(error)}
+              sx={{ textTransform: "none", fontWeight: 700 }}
             >
-              Showing {Math.min(visibleCount, auditLogs.length)} of{" "}
-              {auditLogs.length} entries
-            </Typography>
-          )}
+              Export report
+            </Button>
+          </Box>
         </Box>
+        {exportError && (
+          <Alert
+            severity="error"
+            onClose={() => setExportError("")}
+            sx={{ mx: 2, mb: 1 }}
+          >
+            {exportError}
+          </Alert>
+        )}
         {loading ? (
           <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
             <CircularProgress />
@@ -335,15 +532,7 @@ export default function Audit() {
                 }}
               >
                 <TableRow>
-                  {[
-                    "Datetime",
-                    "Action",
-                    "Actor",
-                    "Room ID",
-                    "Role",
-                    "Status",
-                    "Information",
-                  ].map((heading) => (
+                  {reportHeaders.map((heading) => (
                     <TableCell
                       key={heading}
                       sx={{
@@ -398,7 +587,7 @@ export default function Audit() {
                     </TableCell>
                     <TableCell>
                       <Chip
-                        label={formatAndCapitalize(log.role)}
+                        label={formatAuditRole(log.role)}
                         size="small"
                         sx={{
                           height: 20,
@@ -501,6 +690,47 @@ export default function Audit() {
           </TableContainer>
         )}
       </Paper>
+      <Dialog
+        open={exportDialogOpen}
+        onClose={() => setExportDialogOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Export audit report</DialogTitle>
+        <DialogContent>
+          {exportError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {exportError}
+            </Alert>
+          )}
+          <Typography color="text.secondary" sx={{ mb: 1 }}>
+            Choose a file format for the {auditLogs.length} audit entries
+            matching your current filters.
+          </Typography>
+          <RadioGroup
+            value={exportFormat}
+            onChange={(event) => setExportFormat(event.target.value)}
+          >
+            <FormControlLabel value="csv" control={<Radio />} label="CSV" />
+            <FormControlLabel
+              value="excel"
+              control={<Radio />}
+              label="Excel (.xls)"
+            />
+            <FormControlLabel
+              value="pdf"
+              control={<Radio />}
+              label="PDF (print or save as PDF)"
+            />
+          </RadioGroup>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setExportDialogOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={generateReport}>
+            Generate report
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
