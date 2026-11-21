@@ -54,6 +54,7 @@ INSERT INTO `admin` (`admin_id`, `username`, `first_name`, `last_name`, `role`, 
 CREATE TABLE `announcement` (
   `announcement_id` int(11) NOT NULL,
   `room_id` int(11) DEFAULT NULL,
+  `title` varchar(200) DEFAULT NULL,
   `announcement_body` text NOT NULL,
   `link` varchar(255) DEFAULT NULL,
   `image` varchar(255) DEFAULT NULL,
@@ -109,6 +110,7 @@ CREATE TABLE `governance_announcement` (
   `announcement_id` int(11) NOT NULL AUTO_INCREMENT,
   `visibility_scope` enum('college','global') NOT NULL,
   `college` varchar(150) DEFAULT NULL,
+  `title` varchar(200) DEFAULT NULL,
   `announcement_body` text NOT NULL,
   `link` varchar(255) DEFAULT NULL,
   `images` JSON DEFAULT NULL,
@@ -236,6 +238,7 @@ CREATE TABLE `student` (
   `first_name` varchar(100) NOT NULL,
   `last_name` varchar(100) NOT NULL,
   `student_number` varchar(150) NOT NULL,
+  `email` varchar(255) DEFAULT NULL,
   `position` varchar(100) DEFAULT 'Student',
   `college` varchar(150) DEFAULT NULL,
   `course` varchar(150) DEFAULT NULL,
@@ -318,6 +321,7 @@ ALTER TABLE `calendar_event`
 ALTER TABLE `student`
   ADD PRIMARY KEY (`student_id`),
   ADD UNIQUE KEY `student_number` (`student_number`),
+  ADD UNIQUE KEY `uq_student_email` (`email`),
   ADD KEY `idx_student_batch_id` (`batch_id`);
 
 --

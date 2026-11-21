@@ -18,6 +18,10 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import LaunchIcon from "@mui/icons-material/Launch";
 import { API_BASE_URL } from "../../../api/apiBaseURL";
 import { getAnnouncementImages } from "../../../utils/announcementImages";
+import {
+  formatAnnouncementBodyHtml,
+  stripAnnouncementHtml,
+} from "../../../utils/announcementFormat";
 
 function AnnouncementCard({ announcement, onEdit, onDelete }) {
   const dialogTitleId = useId();
@@ -47,8 +51,11 @@ function AnnouncementCard({ announcement, onEdit, onDelete }) {
       ? announcement.link
       : `https://${announcement.link}`
     : null;
+  const plainBody = stripAnnouncementHtml(announcement.announcement_body);
+  const formattedBodyHtml = formatAnnouncementBodyHtml(announcement.announcement_body);
   const announcementPreview =
-    announcement.announcement_body?.replace(/\s+/g, " ").trim().slice(0, 80) ||
+    announcement.title?.trim() ||
+    plainBody.replace(/\s+/g, " ").trim().slice(0, 80) ||
     "Announcement details";
   const closeDetails = () => {
     setDetailsOpen(false);
@@ -158,23 +165,40 @@ function AnnouncementCard({ announcement, onEdit, onDelete }) {
           )}
         </Box>
 
+        {/* Title */}
+        {announcement.title && (
+          <Typography
+            component="h3"
+            variant="h6"
+            sx={{
+              m: 0,
+              mb: 1,
+              fontWeight: 700,
+              color: "text.primary",
+              wordBreak: "break-word",
+            }}
+          >
+            {announcement.title}
+          </Typography>
+        )}
+
         {/* Body */}
-        <Typography
-          component="p"
+        <Box
           sx={{
             m: 0,
-            whiteSpace: "pre-wrap",
             wordBreak: "break-word",
-            color: "#edf7f7",
+            color: "text.primary",
             fontFamily: '"Avenir Next", "Segoe UI", sans-serif',
             fontSize: "1rem",
             lineHeight: 1.65,
-            fontWeight: 500,
+            fontWeight: 400,
             mb: imageNames.length ? 3 : announcement.link ? 2 : 0,
+            "& p": { m: 0, mb: 1 },
+            "& p:last-child": { mb: 0 },
+            "& ul, & ol": { pl: 3, my: 0.75 },
           }}
-        >
-          {announcement.announcement_body}
-        </Typography>
+          dangerouslySetInnerHTML={{ __html: formattedBodyHtml }}
+        />
 
         {/* Link */}
         {announcement.link && (
@@ -318,8 +342,8 @@ function AnnouncementCard({ announcement, onEdit, onDelete }) {
               }}
             >
               <Box>
-                <Typography component="h2" variant="h6" fontWeight={700}>
-                  Announcement
+                <Typography component="h2" variant="h6" fontWeight={700} color="text.primary">
+                  {announcement.title || "Announcement"}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   {formatDate(announcement.date_created)}
@@ -330,17 +354,18 @@ function AnnouncementCard({ announcement, onEdit, onDelete }) {
               </IconButton>
             </DialogTitle>
             <DialogContent dividers>
-              <Typography
-                component="p"
+              <Box
                 sx={{
                   m: 0,
-                  whiteSpace: "pre-wrap",
                   overflowWrap: "anywhere",
                   lineHeight: 1.7,
+                  color: "text.primary",
+                  "& p": { m: 0, mb: 1 },
+                  "& p:last-child": { mb: 0 },
+                  "& ul, & ol": { pl: 3, my: 0.75 },
                 }}
-              >
-                {announcement.announcement_body}
-              </Typography>
+                dangerouslySetInnerHTML={{ __html: formattedBodyHtml }}
+              />
 
               {announcementLink && (
                 <MuiLink

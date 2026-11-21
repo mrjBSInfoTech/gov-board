@@ -63,6 +63,9 @@ function AccountInfo({ open, handleClose, selectedAccount }) {
               <strong>Name:</strong> {officer.first_name} {officer.last_name}
             </Typography>
             <Typography variant="body2">
+              <strong>Email:</strong> {officer.email || "N/A"}
+            </Typography>
+            <Typography variant="body2">
               <strong>Role:</strong> {capitalize(officer.role)}
             </Typography>
             <Typography variant="body2">

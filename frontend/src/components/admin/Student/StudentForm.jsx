@@ -14,6 +14,7 @@ const emptyForm = {
   first_name: "",
   last_name: "",
   student_number: "",
+  email: "",
   college: "",
   course: "",
   year: "",
@@ -42,6 +43,7 @@ export default function StudentForm({
             first_name: toText(selectedStudent.first_name),
             last_name: toText(selectedStudent.last_name),
             student_number: toText(selectedStudent.student_number),
+            email: toText(selectedStudent.email),
             college: toText(selectedStudent.college),
             course: toText(selectedStudent.course),
             year: toText(selectedStudent.year),
@@ -138,6 +140,15 @@ export default function StudentForm({
               onChange={handleChange}
               disabled={loading}
               required
+            />
+            <TextField
+              label="Email"
+              name="email"
+              type="email"
+              value={formData.email}
+              onChange={handleChange}
+              disabled={loading}
+              inputProps={{ maxLength: 255 }}
             />
             <TextField
               label="College"

@@ -12,6 +12,10 @@ import {
   canDeleteStudent,
   canEditStudentDetails,
 } from "../../utils/shared/adminPermissions.js";
+import {
+  isDuplicateEmailError,
+  normalizeStudentEmail,
+} from "../../utils/shared/announcementEmailService.js";
 
 const router = express.Router();
 
@@ -53,7 +57,7 @@ const POSITION_OPTIONS = [
 router.get("/", authenticateAdmin, (req, res) => {
   const collegeFilter = getAdminCollegeFilter(req, "s.college");
   const sql = `
-    SELECT s.student_id, s.first_name, s.last_name, s.student_number, s.position,
+    SELECT s.student_id, s.first_name, s.last_name, s.student_number, s.email, s.position,
       s.college, s.course,
       b.year_name AS year, b.section_name AS section, s.date_created
     FROM student s
@@ -82,6 +86,7 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
     first_name,
     last_name,
     student_number,
+    email: rawEmail,
     college: requestedCollege,
     course: requestedCourse,
     year,
@@ -90,8 +95,12 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
   } = req.body;
   const college = resolveAdminCollege(req, requestedCollege);
   const course = typeof requestedCourse === "string" ? requestedCourse.trim() : "";
+  const { email, error: emailError } = normalizeStudentEmail(rawEmail);
   if (requestedCourse != null && typeof requestedCourse !== "string") {
     return res.status(400).json({ message: "Course must be text." });
+  }
+  if (emailError) {
+    return res.status(400).json({ message: emailError });
   }
 
   if (!college && !req.user.is_super_admin) {
@@ -122,12 +131,13 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
       first_name.trim(),
       last_name.trim(),
       student_number.trim(),
+      email,
       college,
       course || null,
       batchId,
     ];
     let updateSql =
-      "UPDATE student SET first_name = ?, last_name = ?, student_number = ?, college = ?, course = ?, batch_id = ?";
+      "UPDATE student SET first_name = ?, last_name = ?, student_number = ?, email = ?, college = ?, course = ?, batch_id = ?";
 
     if (password) {
       if (password.length < 6) {
@@ -155,6 +165,13 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
     await connection.commit();
     return res.json({ message: "Student account updated successfully" });
   } catch (error) {
+    if (error.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({
+        message: isDuplicateEmailError(error)
+          ? "Email address is already in use."
+          : "Student number already exists.",
+      });
+    }
     console.error("DB error:", error);
     return res.status(500).json({ message: "Database error" });
   }

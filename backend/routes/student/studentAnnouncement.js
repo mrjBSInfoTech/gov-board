@@ -1,7 +1,7 @@
 import express from "express";
 import db from "../../database/db.js";
 import { authenticateStudent } from "../../middleware/studentAuthMiddleware.js";
-import { getRoomCollegeMemberVisibilityPredicate } from "../../utils/shared/calendarEventScope.js";
+import { getRoomGovernanceAnnouncementPredicate } from "../../utils/shared/calendarEventScope.js";
 
 const router = express.Router();
 
@@ -54,22 +54,18 @@ router.get("/", authenticateStudent, (req, res) => {
       }
 
       db.query(
-        `SELECT announcement_id, room_id, announcement_body, link, image, images, date_created,
+        `SELECT announcement_id, room_id, title, announcement_body, link, image, images, date_created,
                 'room' AS source_type
            FROM announcement
           WHERE room_id = ?
          UNION ALL
          SELECT CONCAT('governance-', ga.announcement_id) AS announcement_id,
-                ?, ga.announcement_body, ga.link, NULL AS image, ga.images,
+                ?, ga.title, ga.announcement_body, ga.link, NULL AS image, ga.images,
                 ga.date_created, 'governance' AS source_type
            FROM governance_announcement ga
            JOIN room r ON r.room_id = ?
            JOIN student s ON s.student_id = ?
-          WHERE ga.visibility_scope = 'global'
-             OR (
-               ga.visibility_scope = 'college'
-               AND ${getRoomCollegeMemberVisibilityPredicate("ga.college")}
-             )
+          WHERE ${getRoomGovernanceAnnouncementPredicate({ studentAlias: "s" })}
           ORDER BY date_created DESC, announcement_id DESC`,
         [roomId, roomId, roomId, req.user.student_id],
         (err, results) => {

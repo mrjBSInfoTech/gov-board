@@ -49,6 +49,7 @@ export default function Register() {
     first_name: "",
     last_name: "",
     student_number: "",
+    email: "",
     college: "",
     course: "",
     year: "",
@@ -98,6 +99,7 @@ export default function Register() {
       !form.first_name ||
       !form.last_name ||
       !form.student_number ||
+      !form.email.trim() ||
       !form.college.trim() ||
       !form.year ||
       !form.section ||
@@ -124,6 +126,7 @@ export default function Register() {
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
         student_number: form.student_number.trim(),
+        email: form.email.trim(),
         college: form.college.trim(),
         course: form.course.trim(),
         year: form.year.trim(),
@@ -328,6 +331,20 @@ export default function Register() {
                 }}
               />
             </Box>
+
+            <TextField
+              fullWidth
+              label="Email"
+              type="email"
+              placeholder="Enter your email address"
+              name="email"
+              value={form.email}
+              onChange={handleChange}
+              size="small"
+              required
+              inputProps={{ maxLength: 255 }}
+              InputProps={{ sx: inputStyle }}
+            />
 
             <TextField
               fullWidth

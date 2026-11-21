@@ -44,6 +44,7 @@ const emptyForm = {
   first_name: "",
   last_name: "",
   student_number: "",
+  email: "",
   college: "",
   course: "",
   position: "",
@@ -115,6 +116,7 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
     if (selectedAccount) {
       setFormData({
         student_number: toText(selectedAccount.student_number),
+        email: toText(selectedAccount.email),
         college: toText(selectedAccount.college),
         course: toText(selectedAccount.course),
         position: toText(selectedAccount.position),
@@ -240,6 +242,7 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
     try {
       const payload = {
         student_number: studentNumber,
+        email: toText(formData.email).trim(),
         college,
         course: toText(formData.course).trim(),
         position,
@@ -322,6 +325,16 @@ function AccountForm({ open, handleClose, selectedAccount, onSubmit }) {
             disabled={loading}
             required
             size="small"
+          />
+          <TextField
+            label="Email"
+            name="email"
+            type="email"
+            value={formData.email}
+            onChange={handleChange}
+            disabled={loading}
+            size="small"
+            inputProps={{ maxLength: 255 }}
           />
           <TextField
             label="College"

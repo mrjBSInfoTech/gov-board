@@ -32,6 +32,7 @@ import {
 } from "../../api/roomAPI";
 import RoomLevelBar from "../../components/room/RoomLevelBar";
 import RoomLeaveDialog from "../../components/room/RoomLeaveDialog";
+import { stripAnnouncementHtml } from "../../utils/announcementFormat";
 
 // Slide Transition for Snackbar
 function SlideTransition(props) {
@@ -239,7 +240,8 @@ export default function AnnouncementPage() {
     const term = searchTerm.trim().toLowerCase();
     if (!term) return true;
     return (
-      announcement.announcement_body?.toLowerCase().includes(term) ||
+      announcement.title?.toLowerCase().includes(term) ||
+      stripAnnouncementHtml(announcement.announcement_body).toLowerCase().includes(term) ||
       announcement.link?.toLowerCase().includes(term)
     );
   });

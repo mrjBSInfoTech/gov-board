@@ -9,12 +9,16 @@ import { fileURLToPath } from "url";
 import { authenticateOfficer } from "../../middleware/officerAuthMiddleware.js";
 import { auditLoginActivity } from "../../utils/shared/loginActivityLogger.js";
 import { awardLoginXp } from "../../utils/shared/roomLevelService.js";
+import {
+  isDuplicateEmailError,
+  normalizeStudentEmail,
+} from "../../utils/shared/announcementEmailService.js";
 
 const router = express.Router();
 
 router.get("/account", authenticateOfficer, (req, res) => {
   db.query(
-    `SELECT first_name, last_name, student_number, college, course
+    `SELECT first_name, last_name, student_number, email, college, course
        FROM student
       WHERE student_id = ?
         AND (role IS NOT NULL OR EXISTS (
@@ -39,17 +43,21 @@ router.put("/account", authenticateOfficer, (req, res) => {
   const lastName = req.body.last_name?.trim();
   const studentNumber = req.body.student_number?.trim();
   const course = typeof req.body.course === "string" ? req.body.course.trim() : "";
+  const { email, error: emailError } = normalizeStudentEmail(req.body.email);
   if (req.body.course != null && typeof req.body.course !== "string") {
     return res.status(400).json({ message: "Course must be text." });
   }
   if (!firstName || !lastName || !studentNumber) {
     return res.status(400).json({ message: "First name, last name, and student number are required." });
   }
+  if (emailError) {
+    return res.status(400).json({ message: emailError });
+  }
   if (course.length > 150) {
     return res.status(400).json({ message: "Course must be 150 characters or fewer." });
   }
   db.query(
-    `UPDATE student SET first_name = ?, last_name = ?, student_number = ?, course = ?
+    `UPDATE student SET first_name = ?, last_name = ?, student_number = ?, email = ?, course = ?
      WHERE student_id = ?
        AND (role IS NOT NULL OR EXISTS (
          SELECT 1 FROM room_member
@@ -59,13 +67,20 @@ router.put("/account", authenticateOfficer, (req, res) => {
       firstName,
       lastName,
       studentNumber,
+      email,
       course || null,
       req.user.officer_id,
       req.user.officer_id,
     ],
     (err) => {
       if (err) {
-        if (err.code === "ER_DUP_ENTRY") return res.status(409).json({ message: "Student number already exists." });
+        if (err.code === "ER_DUP_ENTRY") {
+          return res.status(409).json({
+            message: isDuplicateEmailError(err)
+              ? "Email address is already in use."
+              : "Student number already exists.",
+          });
+        }
         console.error("Officer account update error:", err);
         return res.status(500).json({ message: "Unable to update account." });
       }
@@ -73,6 +88,7 @@ router.put("/account", authenticateOfficer, (req, res) => {
         first_name: firstName,
         last_name: lastName,
         student_number: studentNumber,
+        email,
         course: course || null,
       });
     },

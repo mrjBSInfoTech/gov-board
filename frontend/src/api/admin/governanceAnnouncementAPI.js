@@ -33,10 +33,28 @@ export const fetchGovernanceAnnouncements = async () => {
 export const createGovernanceAnnouncement = async (announcement) => {
   try {
     const formData = new FormData();
+    formData.append("title", announcement.title || "");
     formData.append("announcement_body", announcement.announcement_body);
     formData.append("link", announcement.link || "");
     (announcement.files || []).forEach((file) => formData.append("files", file));
     const response = await api.post("/", formData);
+    return response.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
+
+export const updateGovernanceAnnouncement = async (announcementId, announcement) => {
+  try {
+    const formData = new FormData();
+    formData.append("title", announcement.title || "");
+    formData.append("announcement_body", announcement.announcement_body);
+    formData.append("link", announcement.link || "");
+    if (announcement.send_update_email) {
+      formData.append("send_update_email", "true");
+    }
+    (announcement.files || []).forEach((file) => formData.append("files", file));
+    const response = await api.put(`/${announcementId}`, formData);
     return response.data;
   } catch (error) {
     handleError(error);

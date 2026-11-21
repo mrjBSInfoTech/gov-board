@@ -43,6 +43,7 @@ import {
 } from "../../api/roomAPI";
 import RoomLevelBar from "../../components/room/RoomLevelBar";
 import { canManageGovernanceSection } from "../../utils/governanceAccess";
+import { stripAnnouncementHtml } from "../../utils/announcementFormat";
 
 // Slide Transition for Snackbar
 function SlideTransition(props) {
@@ -315,11 +316,12 @@ export default function AnnouncementPage({ governancePage = false, readOnly = fa
   // Filter announcements based on search term
   const filteredAnnouncements = announcements.filter((item) => {
     const term = searchTerm.toLowerCase();
-    const bodyMatch = (item.announcement_body || "")
+    const titleMatch = (item.title || "").toLowerCase().includes(term);
+    const bodyMatch = stripAnnouncementHtml(item.announcement_body || "")
       .toLowerCase()
       .includes(term);
     const linkMatch = (item.link || "").toLowerCase().includes(term);
-    return bodyMatch || linkMatch;
+    return titleMatch || bodyMatch || linkMatch;
   });
 
   return (

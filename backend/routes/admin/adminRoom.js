@@ -7,7 +7,7 @@ import {
 } from "../../utils/shared/adminScope.js";
 import { clearOrphanedOfficerStatus } from "../../utils/shared/roomOfficerAccess.js";
 import { normalizeRoomCollegeTargets } from "../../utils/shared/roomCollegeAudience.js";
-import { getRoomCollegeAudiencePredicate } from "../../utils/shared/calendarEventScope.js";
+import { getRoomGovernanceAnnouncementPredicate } from "../../utils/shared/calendarEventScope.js";
 
 const router = express.Router();
 
@@ -192,26 +192,21 @@ router.get("/:id/announcements", authenticateAdmin, async (req, res) => {
     const [announcements] = await db.promise().query(
       `SELECT *
          FROM (
-           SELECT a.announcement_id, a.room_id, a.announcement_body, a.link,
+           SELECT a.announcement_id, a.room_id, a.title, a.announcement_body, a.link,
                   a.image, a.images, a.date_created, 'room' AS source_type
              FROM announcement a
              JOIN room r ON r.room_id = a.room_id
             WHERE a.room_id = ?${roomCollegeFilter.sql}
            UNION ALL
-           SELECT ga.announcement_id, r.room_id, ga.announcement_body, ga.link,
+           SELECT ga.announcement_id, r.room_id, ga.title, ga.announcement_body, ga.link,
                   NULL AS image, ga.images, ga.date_created, 'governance' AS source_type
              FROM governance_announcement ga
              JOIN room r ON r.room_id = ?
             WHERE r.room_id = ?
               ${roomCollegeFilter.sql}
-              AND (
-                ga.visibility_scope = 'global'
-                OR (
-                  ga.visibility_scope = 'college'
-                  AND ${getRoomCollegeAudiencePredicate("ga.college")}
-                  ${governanceCollegeFilter}
-                )
-              )
+              AND ${getRoomGovernanceAnnouncementPredicate({
+                extraCollegeSql: governanceCollegeFilter,
+              })}
          ) AS visible_announcements
         ORDER BY date_created DESC, announcement_id DESC`,
       [

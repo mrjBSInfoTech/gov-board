@@ -292,9 +292,9 @@ function RoomForm({ open, handleClose, selectedRoom, onSubmit }) {
             </RadioGroup>
             <Typography variant="caption" color="text.secondary">
               Governors and College Heads from the selected colleges can view
-              this room in the admin console. The room's assigned college
-              retains access to manage it. College-specific posts and events
-              also use this audience. Anyone with the room code can still join.
+              this room in the admin console. When specific colleges are
+              selected, only announcements for those colleges (and this room)
+              are displayed. Anyone with the room code can still join.
             </Typography>
             {!form.all_colleges && (
               <>

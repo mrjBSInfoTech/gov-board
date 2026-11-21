@@ -91,7 +91,7 @@ export default function Students() {
       const matchesSection =
         selectedSection === "All" || account.section === selectedSection;
       const searchable =
-        `${account.first_name} ${account.last_name} ${account.student_number} ${account.position} ${account.course} ${account.section} ${account.college}`.toLowerCase();
+        `${account.first_name} ${account.last_name} ${account.student_number} ${account.email || ""} ${account.position} ${account.course} ${account.section} ${account.college}`.toLowerCase();
       return (
         matchesType &&
         matchesSection &&
@@ -290,6 +290,7 @@ export default function Students() {
           columns={[
             { label: "Account Type", render: (account) => account.is_officer ? "Officer" : "Student" },
             { label: "Student Number", key: "student_number" },
+            { label: "Email", key: "email" },
             { label: "Position", key: "position" },
             { label: "College", key: "college" },
             { label: "Course", key: "course" },

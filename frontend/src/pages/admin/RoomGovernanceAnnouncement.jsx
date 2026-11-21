@@ -5,7 +5,13 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
   IconButton,
   Snackbar,
   Stack,
@@ -17,14 +23,21 @@ import { Helmet } from "react-helmet-async";
 import CampaignOutlinedIcon from "@mui/icons-material/CampaignOutlined";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
 import {
   createGovernanceAnnouncement,
   deleteGovernanceAnnouncement,
   fetchGovernanceAnnouncements,
+  updateGovernanceAnnouncement,
 } from "../../api/admin/governanceAnnouncementAPI";
 import { API_BASE_URL } from "../../api/apiBaseURL";
 import { getAnnouncementImages } from "../../utils/announcementImages";
+import {
+  formatAnnouncementBodyHtml,
+  stripAnnouncementHtml,
+} from "../../utils/announcementFormat";
 import AnnouncementDelete from "../../components/officer/Announcement/AnnouncementDelete";
+import RichTextEditor from "../../components/common/RichTextEditor";
 
 const GOVERNANCE_IMAGE_BASE_URL = `${API_BASE_URL}/uploads/admin/governanceAnnouncement`;
 
@@ -32,6 +45,7 @@ export default function RoomGovernanceAnnouncement() {
   const isGlobalAdmin = localStorage.getItem("admin_position") === "Super Admin";
   const adminCollege = localStorage.getItem("admin_college");
   const [announcements, setAnnouncements] = useState([]);
+  const [title, setTitle] = useState("");
   const [announcementBody, setAnnouncementBody] = useState("");
   const [link, setLink] = useState("");
   const [files, setFiles] = useState([]);
@@ -43,6 +57,15 @@ export default function RoomGovernanceAnnouncement() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editBody, setEditBody] = useState("");
+  const [editLink, setEditLink] = useState("");
+  const [editFiles, setEditFiles] = useState([]);
+  const [editSendEmail, setEditSendEmail] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
 
   useEffect(() => {
     const previews = files.map((file) => ({
@@ -68,18 +91,22 @@ export default function RoomGovernanceAnnouncement() {
     void loadAnnouncements();
   }, [loadAnnouncements]);
 
+  const hasBodyText = Boolean(stripAnnouncementHtml(announcementBody));
+
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!announcementBody.trim() || saving) return;
+    if (!hasBodyText || saving) return;
     setSaving(true);
     setError("");
     setSuccess("");
     try {
       await createGovernanceAnnouncement({
+        title: title.trim(),
         announcement_body: announcementBody.trim(),
         link: link.trim(),
         files,
       });
+      setTitle("");
       setAnnouncementBody("");
       setLink("");
       setFiles([]);
@@ -89,6 +116,56 @@ export default function RoomGovernanceAnnouncement() {
       setError(submitError.message || "Unable to post announcement.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openEditDialog = (announcement) => {
+    setEditTarget(announcement);
+    setEditTitle(announcement.title || "");
+    setEditBody(announcement.announcement_body || "");
+    setEditLink(announcement.link || "");
+    setEditFiles([]);
+    setEditSendEmail(false);
+    setEditError("");
+    setEditOpen(true);
+  };
+
+  const closeEditDialog = () => {
+    if (editSaving) return;
+    setEditOpen(false);
+    setEditTarget(null);
+    setEditFiles([]);
+    setEditSendEmail(false);
+    setEditError("");
+  };
+
+  const handleEditSubmit = async (event) => {
+    event.preventDefault();
+    if (!editTarget || editSaving) return;
+    if (!stripAnnouncementHtml(editBody)) {
+      setEditError("Announcement text is required.");
+      return;
+    }
+    setEditSaving(true);
+    setEditError("");
+    try {
+      await updateGovernanceAnnouncement(editTarget.announcement_id, {
+        title: editTitle.trim(),
+        announcement_body: editBody.trim(),
+        link: editLink.trim(),
+        files: editFiles,
+        send_update_email: editSendEmail,
+      });
+      setEditOpen(false);
+      setEditTarget(null);
+      setEditFiles([]);
+      setEditSendEmail(false);
+      setSuccess("Announcement updated.");
+      await loadAnnouncements();
+    } catch (updateError) {
+      setEditError(updateError.message || "Unable to update announcement.");
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -137,7 +214,7 @@ export default function RoomGovernanceAnnouncement() {
       </Stack>
       <Typography color="text.secondary" sx={{ mb: 3 }}>
         {isGlobalAdmin
-          ? "Global announcements appear in every room."
+          ? "Global announcements appear in rooms set to Every college."
           : `Your announcements are shown to ${adminCollege || "your college"} members in rooms that include that college.`}{" "}
         Room owners control the audience in room settings; anyone with a room
         code can still join.
@@ -148,15 +225,21 @@ export default function RoomGovernanceAnnouncement() {
           <Stack spacing={2}>
             <Typography variant="h6">New announcement</Typography>
             <TextField
+              label="Title / Subject (optional)"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="e.g. University-Wide Assembly"
+              inputProps={{ maxLength: 200 }}
+              disabled={saving}
+              fullWidth
+            />
+            <RichTextEditor
               label="Announcement"
               value={announcementBody}
-              onChange={(event) => setAnnouncementBody(event.target.value)}
-              multiline
-              minRows={4}
-              maxRows={10}
-              inputProps={{ maxLength: 5000 }}
+              onChange={setAnnouncementBody}
+              placeholder="Write your announcement..."
+              disabled={saving}
               required
-              fullWidth
             />
             <TextField
               label="Link (optional)"
@@ -230,7 +313,7 @@ export default function RoomGovernanceAnnouncement() {
               <Button
                 type="submit"
                 variant="contained"
-                disabled={saving || !announcementBody.trim()}
+                disabled={saving || !hasBodyText}
               >
                 {saving ? "Posting..." : "Post announcement"}
               </Button>
@@ -275,9 +358,28 @@ export default function RoomGovernanceAnnouncement() {
                     {new Date(announcement.date_created).toLocaleString()}
                   </Typography>
                 </Stack>
-                <Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-                  {announcement.announcement_body}
-                </Typography>
+                {announcement.title && (
+                  <Typography
+                    component="h3"
+                    variant="h6"
+                    sx={{ fontWeight: 700, mb: 0.75, color: "text.primary", overflowWrap: "anywhere" }}
+                  >
+                    {announcement.title}
+                  </Typography>
+                )}
+                <Box
+                  sx={{
+                    color: "text.primary",
+                    overflowWrap: "anywhere",
+                    lineHeight: 1.65,
+                    "& p": { m: 0, mb: 1 },
+                    "& p:last-child": { mb: 0 },
+                    "& ul, & ol": { pl: 3, my: 0.75 },
+                  }}
+                  dangerouslySetInnerHTML={{
+                    __html: formatAnnouncementBodyHtml(announcement.announcement_body),
+                  }}
+                />
                 {announcement.link && (
                   <Typography
                     component="a"
@@ -319,12 +421,23 @@ export default function RoomGovernanceAnnouncement() {
                   </Box>
                 )}
                 {canDeleteAnnouncement(announcement) && (
-                  <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
+                  <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 0.5, mt: 1 }}>
+                    <Tooltip title="Edit announcement">
+                      <IconButton
+                        color="primary"
+                        aria-label="Edit announcement"
+                        disabled={deleting || editSaving}
+                        onClick={() => openEditDialog(announcement)}
+                        sx={{ width: 44, height: 44 }}
+                      >
+                        <EditIcon />
+                      </IconButton>
+                    </Tooltip>
                     <Tooltip title="Delete announcement">
                       <IconButton
                         color="error"
                         aria-label="Delete announcement"
-                        disabled={deleting}
+                        disabled={deleting || editSaving}
                         onClick={() => {
                           setSelectedAnnouncement(announcement);
                           setDeleteOpen(true);
@@ -341,6 +454,88 @@ export default function RoomGovernanceAnnouncement() {
           ))}
         </Stack>
       )}
+
+      <Dialog open={editOpen} onClose={closeEditDialog} fullWidth maxWidth="md">
+        <DialogTitle>Edit announcement</DialogTitle>
+        <Box component="form" onSubmit={handleEditSubmit}>
+          <DialogContent dividers>
+            <Stack spacing={2}>
+              <TextField
+                label="Title / Subject (optional)"
+                value={editTitle}
+                onChange={(event) => setEditTitle(event.target.value)}
+                inputProps={{ maxLength: 200 }}
+                disabled={editSaving}
+                fullWidth
+              />
+              <RichTextEditor
+                label="Announcement"
+                value={editBody}
+                onChange={setEditBody}
+                disabled={editSaving}
+                required
+              />
+              <TextField
+                label="Link (optional)"
+                value={editLink}
+                onChange={(event) => setEditLink(event.target.value)}
+                inputProps={{ maxLength: 255 }}
+                disabled={editSaving}
+                fullWidth
+              />
+              <Box>
+                <Button
+                  component="label"
+                  variant="outlined"
+                  startIcon={<CloudUploadIcon />}
+                  disabled={editSaving}
+                >
+                  Add more photos
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    multiple
+                    hidden
+                    onChange={(event) => {
+                      const selected = Array.from(event.target.files || []);
+                      setEditFiles((current) => [...current, ...selected]);
+                      event.target.value = "";
+                    }}
+                  />
+                </Button>
+                {editFiles.length > 0 && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75 }}>
+                    {editFiles.length} new photo{editFiles.length === 1 ? "" : "s"} selected to append.
+                  </Typography>
+                )}
+              </Box>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={editSendEmail}
+                    onChange={(event) => setEditSendEmail(event.target.checked)}
+                    disabled={editSaving}
+                  />
+                }
+                label="Send update email to students"
+              />
+              {editError && <Alert severity="error">{editError}</Alert>}
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeEditDialog} disabled={editSaving}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={editSaving || !stripAnnouncementHtml(editBody)}
+            >
+              {editSaving ? "Saving..." : "Save changes"}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
 
       <AnnouncementDelete
         open={deleteOpen}

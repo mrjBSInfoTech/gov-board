@@ -79,6 +79,7 @@ export const addAnnouncement = async (announcementData) => {
     }
 
     const formData = new FormData();
+    formData.append("title", (announcementData.title || "").trim());
     formData.append("announcement_body", announcementData.announcement_body.trim());
     if (announcementData.link) formData.append("link", announcementData.link.trim());
     if (announcementData.room_id) formData.append("room_id", announcementData.room_id);
@@ -107,9 +108,13 @@ export const updateAnnouncement = async (id, announcementData) => {
     }
 
     const formData = new FormData();
+    formData.append("title", (announcementData.title || "").trim());
     formData.append("announcement_body", announcementData.announcement_body.trim());
     formData.append("link", announcementData.link ? announcementData.link.trim() : "");
     if (announcementData.room_id) formData.append("room_id", announcementData.room_id);
+    if (announcementData.send_update_email) {
+      formData.append("send_update_email", "true");
+    }
     const files = Array.isArray(announcementData.files)
       ? announcementData.files
       : announcementData.file instanceof File

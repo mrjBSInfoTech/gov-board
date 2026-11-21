@@ -11,6 +11,7 @@ import {
 } from "../../utils/shared/calendarEventScope.js";
 import { buildGovernanceReportCsv } from "../../utils/officer/governanceReportCsv.js";
 import { logOfficerAudit } from "../../utils/officer/officerAuditLogger.js";
+import { stripAnnouncementHtml } from "../../utils/shared/announcementFormat.js";
 
 const router = express.Router();
 
@@ -43,12 +44,22 @@ router.get(
       const roomId = req.governanceRoomId;
       const [announcements, budgets, events, members, funds, contributions, audit] = await Promise.all([
         connection.query(
-          `SELECT announcement_id, date_created, announcement_body, link
+          `SELECT announcement_id, date_created, title, announcement_body, link
              FROM announcement
             WHERE room_id = ?
             ORDER BY date_created DESC, announcement_id DESC`,
           [roomId],
-        ).then(([rows]) => rows),
+        ).then(([rows]) =>
+          rows.map((item) => {
+            const plainBody = stripAnnouncementHtml(item.announcement_body);
+            return {
+              ...item,
+              announcement_body: item.title
+                ? `${item.title}: ${plainBody}`
+                : plainBody,
+            };
+          }),
+        ),
         connection.query(
           `SELECT b.budget_id, b.budget_name, b.category, b.planned_amount,
                   DATE_FORMAT(b.deadline, '%Y-%m-%d') AS deadline, b.description,

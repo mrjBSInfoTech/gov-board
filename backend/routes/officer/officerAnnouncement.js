@@ -5,8 +5,14 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { authenticateOfficer } from "../../middleware/officerAuthMiddleware.js";
 import { requireOfficerGovernanceAccess } from "../../middleware/officerGovernanceAccess.js";
-import { getRoomCollegeMemberVisibilityPredicate } from "../../utils/shared/calendarEventScope.js";
+import { getRoomGovernanceAnnouncementPredicate } from "../../utils/shared/calendarEventScope.js";
 import { getAnnouncementImages } from "../../utils/shared/announcementImages.js";
+import { notifyAnnouncementRecipients } from "../../utils/shared/announcementEmailService.js";
+import {
+  normalizeAnnouncementTitle,
+  sanitizeAnnouncementHtml,
+  stripAnnouncementHtml,
+} from "../../utils/shared/announcementFormat.js";
 import {
   createAnnouncementImageUpload,
   removeAnnouncementFiles,
@@ -89,7 +95,7 @@ router.get(
   (req, res) => {
     if (req.query.roomOnly === "true") {
       db.query(
-        `SELECT announcement_id, room_id, announcement_body, link, image, images,
+        `SELECT announcement_id, room_id, title, announcement_body, link, image, images,
                 date_created, 'room' AS source_type
            FROM announcement
           WHERE room_id = ?
@@ -107,22 +113,18 @@ router.get(
     }
 
     const sql = `
-    SELECT announcement_id, room_id, announcement_body, link, image, images, date_created,
+    SELECT announcement_id, room_id, title, announcement_body, link, image, images, date_created,
            'room' AS source_type
       FROM announcement
      WHERE room_id = ?
     UNION ALL
     SELECT CONCAT('governance-', ga.announcement_id) AS announcement_id,
-           ?, ga.announcement_body, ga.link, NULL AS image, ga.images,
+           ?, ga.title, ga.announcement_body, ga.link, NULL AS image, ga.images,
            ga.date_created, 'governance' AS source_type
       FROM governance_announcement ga
       JOIN room r ON r.room_id = ?
       JOIN student s ON s.student_id = ?
-     WHERE ga.visibility_scope = 'global'
-        OR (
-          ga.visibility_scope = 'college'
-          AND ${getRoomCollegeMemberVisibilityPredicate("ga.college")}
-        )
+     WHERE ${getRoomGovernanceAnnouncementPredicate({ studentAlias: "s" })}
      ORDER BY date_created DESC, announcement_id DESC`;
 
     db.query(
@@ -177,7 +179,7 @@ router.get(
   (req, res) => {
   const { id } = req.params;
   const sql = `
-    SELECT a.announcement_id, a.room_id, a.announcement_body, a.link,
+    SELECT a.announcement_id, a.room_id, a.title, a.announcement_body, a.link,
            a.image, a.images, a.date_created
       FROM announcement a
       INNER JOIN room_member rm ON rm.room_id = a.room_id
@@ -206,13 +208,24 @@ router.post(
   }),
   uploadAnnouncementImages,
   (req, res) => {
-  const { announcement_body, link } = req.body;
+  const { title: rawTitle, announcement_body, link } = req.body;
   const uploadedFiles = getUploadedAnnouncementFiles(req);
+  const { title, error: titleError } = normalizeAnnouncementTitle(rawTitle);
+  const sanitizedBody = sanitizeAnnouncementHtml(announcement_body);
+  const plainBody = stripAnnouncementHtml(sanitizedBody);
 
+  if (titleError) {
+    removeAnnouncementFiles(uploadedFiles);
+    return res.status(400).json({ error: titleError });
+  }
   // Validate required fields
-  if (!announcement_body || !announcement_body.trim()) {
+  if (!plainBody) {
     removeAnnouncementFiles(uploadedFiles);
     return res.status(400).json({ error: "Announcement body is required" });
+  }
+  if (sanitizedBody.length > 20000 || plainBody.length > 5000) {
+    removeAnnouncementFiles(uploadedFiles);
+    return res.status(400).json({ error: "Announcement body is too long." });
   }
 
   const imageNames = uploadedFiles.map((file) => file.filename);
@@ -220,14 +233,15 @@ router.post(
 
   const sql = `
     INSERT INTO announcement 
-    (announcement_body, link, image, images, room_id)
-    VALUES (?, ?, ?, ?, ?)
+    (title, announcement_body, link, image, images, room_id)
+    VALUES (?, ?, ?, ?, ?, ?)
   `;
 
   db.query(
     sql,
     [
-      announcement_body.trim(),
+      title,
+      sanitizedBody,
       link?.trim() || null,
       imageName,
       imageNames.length ? JSON.stringify(imageNames) : null,
@@ -239,9 +253,40 @@ router.post(
         console.error("DB Error:", err);
         return res.status(500).json({ error: err.message });
       }
+
+      const trimmedLink = link?.trim() || null;
+      void db
+        .promise()
+        .query("SELECT first_name, last_name FROM student WHERE student_id = ? LIMIT 1", [
+          req.user.officer_id,
+        ])
+        .then(([officerRows]) => {
+          const officer = officerRows[0];
+          const fullName = officer
+            ? `${officer.first_name} ${officer.last_name}`.trim()
+            : "";
+          const senderLabel = [req.governancePosition, fullName]
+            .filter(Boolean)
+            .join(" ");
+          return notifyAnnouncementRecipients(db.promise(), {
+            scope: "room",
+            roomId: req.roomId,
+            title,
+            senderLabel: senderLabel || "Room Officer",
+            announcementBody: sanitizedBody,
+            link: trimmedLink,
+            images: imageNames,
+            imageUploadDir: uploadDir,
+          });
+        })
+        .catch((emailError) => {
+          console.error("Room announcement email dispatch error:", emailError);
+        });
+
       res.json({
         message: "Announcement added successfully",
         id: result.insertId,
+        title,
         image: imageName,
         images: imageNames,
       });
@@ -261,13 +306,25 @@ router.put(
   uploadAnnouncementImages,
   (req, res) => {
   const { id } = req.params;
-  const { announcement_body, link, room_id } = req.body;
+  const { title: rawTitle, announcement_body, link, room_id, send_update_email } = req.body;
+  const sendUpdateEmail = send_update_email === true || send_update_email === "true";
   const uploadedFiles = getUploadedAnnouncementFiles(req);
+  const { title, error: titleError } = normalizeAnnouncementTitle(rawTitle);
+  const sanitizedBody = sanitizeAnnouncementHtml(announcement_body);
+  const plainBody = stripAnnouncementHtml(sanitizedBody);
 
+  if (titleError) {
+    removeAnnouncementFiles(uploadedFiles);
+    return res.status(400).json({ error: titleError });
+  }
   // Validate required fields
-  if (!announcement_body || !announcement_body.trim()) {
+  if (!plainBody) {
     removeAnnouncementFiles(uploadedFiles);
     return res.status(400).json({ error: "Announcement body is required" });
+  }
+  if (sanitizedBody.length > 20000 || plainBody.length > 5000) {
+    removeAnnouncementFiles(uploadedFiles);
+    return res.status(400).json({ error: "Announcement body is too long." });
   }
 
   if (room_id && Number(room_id) !== req.roomId) {
@@ -297,10 +354,11 @@ router.put(
     ];
     db.query(
       `UPDATE announcement
-          SET announcement_body = ?, link = ?, image = ?, images = ?
+          SET title = ?, announcement_body = ?, link = ?, image = ?, images = ?
         WHERE announcement_id = ? AND room_id = ?`,
       [
-        announcement_body.trim(),
+        title,
+        sanitizedBody,
         link?.trim() || null,
         imageNames[0] || null,
         imageNames.length ? JSON.stringify(imageNames) : null,
@@ -313,6 +371,39 @@ router.put(
           console.error("Announcement update error:", err);
           return res.status(500).json({ error: "Unable to update announcement." });
         }
+
+        if (sendUpdateEmail) {
+          const trimmedLink = link?.trim() || null;
+          void db
+            .promise()
+            .query("SELECT first_name, last_name FROM student WHERE student_id = ? LIMIT 1", [
+              req.user.officer_id,
+            ])
+            .then(([officerRows]) => {
+              const officer = officerRows[0];
+              const fullName = officer
+                ? `${officer.first_name} ${officer.last_name}`.trim()
+                : "";
+              const senderLabel = [req.governancePosition, fullName]
+                .filter(Boolean)
+                .join(" ");
+              return notifyAnnouncementRecipients(db.promise(), {
+                scope: "room",
+                roomId: req.roomId,
+                title,
+                senderLabel: senderLabel || "Room Officer",
+                announcementBody: sanitizedBody,
+                link: trimmedLink,
+                images: imageNames,
+                imageUploadDir: uploadDir,
+                isUpdate: true,
+              });
+            })
+            .catch((emailError) => {
+              console.error("Room announcement update email dispatch error:", emailError);
+            });
+        }
+
         res.json({ message: "Announcement updated successfully" });
       },
     );

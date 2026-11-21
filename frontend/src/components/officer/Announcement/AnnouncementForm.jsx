@@ -11,7 +11,9 @@ import {
   Slide,
   IconButton,
   Alert,
+  Checkbox,
   CircularProgress,
+  FormControlLabel,
   Stack,
   Tooltip,
 } from "@mui/material";
@@ -20,6 +22,8 @@ import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { API_BASE_URL } from "../../../api/apiBaseURL";
 import { getAnnouncementImages } from "../../../utils/announcementImages";
+import { stripAnnouncementHtml } from "../../../utils/announcementFormat";
+import RichTextEditor from "../../common/RichTextEditor";
 
 // Animation transition
 const Transition = React.forwardRef(function Transition(props, ref) {
@@ -31,23 +35,28 @@ const IMAGE_BASE_URL = `${API_BASE_URL}/uploads/officer/uploadAnnouncement`;
 function AnnouncementForm({ open, handleClose, initialData, onSubmit, loading }) {
   const isEdit = Boolean(initialData?.announcement_id);
 
+  const [title, setTitle] = useState("");
   const [announcementBody, setAnnouncementBody] = useState("");
   const [link, setLink] = useState("");
   const [files, setFiles] = useState([]);
   const [filePreviews, setFilePreviews] = useState([]);
+  const [sendUpdateEmail, setSendUpdateEmail] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (open) {
       if (initialData) {
+        setTitle(initialData.title || "");
         setAnnouncementBody(initialData.announcement_body || initialData.description || "");
         setLink(initialData.link || "");
         setFiles([]);
       } else {
+        setTitle("");
         setAnnouncementBody("");
         setLink("");
         setFiles([]);
       }
+      setSendUpdateEmail(false);
       setError("");
     }
   }, [open, initialData]);
@@ -77,15 +86,17 @@ function AnnouncementForm({ open, handleClose, initialData, onSubmit, loading })
     e.preventDefault();
     setError("");
 
-    if (!announcementBody.trim()) {
+    if (!stripAnnouncementHtml(announcementBody)) {
       setError("Announcement content is required.");
       return;
     }
 
     const payload = {
+      title: title.trim(),
       announcement_body: announcementBody.trim(),
       link: link.trim(),
       files,
+      ...(isEdit ? { send_update_email: sendUpdateEmail } : {}),
     };
 
     onSubmit(payload);
@@ -125,16 +136,23 @@ function AnnouncementForm({ open, handleClose, initialData, onSubmit, loading })
             {error && <Alert severity="error">{error}</Alert>}
 
             <TextField
-              label="Announcement Message"
+              label="Title / Subject (Optional)"
               variant="outlined"
               fullWidth
-              required
-              multiline
-              rows={4}
-              placeholder="What's on your mind? Enter announcement details..."
-              value={announcementBody}
-              onChange={(e) => setAnnouncementBody(e.target.value)}
+              placeholder="e.g. Midterm Schedule Reminder"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
               disabled={loading}
+              inputProps={{ maxLength: 200 }}
+            />
+
+            <RichTextEditor
+              label="Announcement Message"
+              value={announcementBody}
+              onChange={setAnnouncementBody}
+              placeholder="Write your announcement details..."
+              disabled={loading}
+              required
             />
 
             <TextField
@@ -248,6 +266,19 @@ function AnnouncementForm({ open, handleClose, initialData, onSubmit, loading })
                 </Box>
               )}
             </Box>
+
+            {isEdit && (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={sendUpdateEmail}
+                    onChange={(event) => setSendUpdateEmail(event.target.checked)}
+                    disabled={loading}
+                  />
+                }
+                label="Send update email to students"
+              />
+            )}
           </Stack>
         </DialogContent>
 

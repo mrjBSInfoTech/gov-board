@@ -4,6 +4,7 @@ import {
   getAdminEventScope,
   getRoomCollegeMemberVisibilityPredicate,
   getRoomCalendarEventPredicate,
+  getRoomGovernanceAnnouncementPredicate,
   isCollegeContentVisibleToRoomMember,
   isCollegeIncludedInRoomAudience,
   isCalendarEventVisibleToRoom,
@@ -109,4 +110,18 @@ test("SQL visibility predicates keep college-targeted content scoped to selected
   const announcementPredicate = getRoomCollegeMemberVisibilityPredicate("ga.college");
   assert.match(announcementPredicate, /room_college rc/);
   assert.match(announcementPredicate, /LOWER\(s\.college\) = LOWER\(ga\.college\)/);
+
+  const memberGovernancePredicate = getRoomGovernanceAnnouncementPredicate({
+    studentAlias: "s",
+  });
+  assert.match(memberGovernancePredicate, /ga\.visibility_scope = 'global' AND r\.all_colleges = 1/);
+  assert.match(memberGovernancePredicate, /room_college rc/);
+  assert.match(memberGovernancePredicate, /LOWER\(s\.college\) = LOWER\(ga\.college\)/);
+
+  const adminGovernancePredicate = getRoomGovernanceAnnouncementPredicate({
+    extraCollegeSql: " AND LOWER(ga.college) = LOWER(?)",
+  });
+  assert.match(adminGovernancePredicate, /ga\.visibility_scope = 'global' AND r\.all_colleges = 1/);
+  assert.doesNotMatch(adminGovernancePredicate, /LOWER\(s\.college\)/);
+  assert.match(adminGovernancePredicate, /AND LOWER\(ga\.college\) = LOWER\(\?\)/);
 });

@@ -7,12 +7,16 @@ import { logStudentAudit } from "../../utils/student/studentAuditLogger.js";
 import { auditLoginActivity } from "../../utils/shared/loginActivityLogger.js";
 import { awardLoginXp } from "../../utils/shared/roomLevelService.js";
 import { clearOrphanedOfficerStatus } from "../../utils/shared/roomOfficerAccess.js";
+import {
+  isDuplicateEmailError,
+  normalizeStudentEmail,
+} from "../../utils/shared/announcementEmailService.js";
 
 const router = express.Router();
 
 const loadAccount = (req, res, callback) => {
   db.query(
-    `SELECT first_name, last_name, student_number, college, course
+    `SELECT first_name, last_name, student_number, email, college, course
      FROM student WHERE student_id = ? LIMIT 1`,
     [req.user.student_id],
     callback,
@@ -35,24 +39,32 @@ router.put("/account", authenticateStudent, (req, res) => {
   const lastName = req.body.last_name?.trim();
   const studentNumber = req.body.student_number?.trim();
   const course = typeof req.body.course === "string" ? req.body.course.trim() : "";
+  const { email, error: emailError } = normalizeStudentEmail(req.body.email);
   if (req.body.course != null && typeof req.body.course !== "string") {
     return res.status(400).json({ message: "Course must be text." });
   }
   if (!firstName || !lastName || !studentNumber) {
     return res.status(400).json({ message: "First name, last name, and student number are required." });
   }
+  if (emailError) {
+    return res.status(400).json({ message: emailError });
+  }
   if (course.length > 150) {
     return res.status(400).json({ message: "Course must be 150 characters or fewer." });
   }
 
   db.query(
-    `UPDATE student SET first_name = ?, last_name = ?, student_number = ?, course = ?
+    `UPDATE student SET first_name = ?, last_name = ?, student_number = ?, email = ?, course = ?
      WHERE student_id = ?`,
-    [firstName, lastName, studentNumber, course || null, req.user.student_id],
+    [firstName, lastName, studentNumber, email, course || null, req.user.student_id],
     (err) => {
       if (err) {
         if (err.code === "ER_DUP_ENTRY") {
-          return res.status(409).json({ message: "Student number already exists." });
+          return res.status(409).json({
+            message: isDuplicateEmailError(err)
+              ? "Email address is already in use."
+              : "Student number already exists.",
+          });
         }
         console.error("Student account update error:", err);
         return res.status(500).json({ message: "Unable to update account." });
@@ -63,6 +75,7 @@ router.put("/account", authenticateStudent, (req, res) => {
         first_name: firstName,
         last_name: lastName,
         student_number: studentNumber,
+        email,
         course: course || null,
       });
     },
@@ -103,6 +116,7 @@ router.post("/register", (req, res) => {
     first_name,
     last_name,
     student_number,
+    email: rawEmail,
     college,
     course,
     position,
@@ -110,6 +124,8 @@ router.post("/register", (req, res) => {
     section,
     password,
   } = req.body;
+
+  const { email, error: emailError } = normalizeStudentEmail(rawEmail);
 
   if (
     !first_name ||
@@ -121,6 +137,9 @@ router.post("/register", (req, res) => {
     !password
   ) {
     return res.status(400).json({ message: "All fields are required" });
+  }
+  if (emailError) {
+    return res.status(400).json({ message: emailError });
   }
   if (course != null && typeof course !== "string") {
     return res.status(400).json({ message: "Course must be text." });
@@ -161,8 +180,8 @@ router.post("/register", (req, res) => {
           const insertStudent = (resolvedBatchId) => {
             const sql = `
             INSERT INTO student
-              (first_name, last_name, student_number, college, course, position, batch_id, password)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+              (first_name, last_name, student_number, email, college, course, position, batch_id, password)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
             db.query(
               sql,
@@ -170,6 +189,7 @@ router.post("/register", (req, res) => {
                 first_name.trim(),
                 last_name.trim(),
                 student_number.trim(),
+                email,
                 college.trim(),
                 typeof course === "string" ? course.trim() || null : null,
                 position?.trim() || "Student",
@@ -179,9 +199,11 @@ router.post("/register", (req, res) => {
               (insertErr, result) => {
                 if (insertErr) {
                   if (insertErr.code === "ER_DUP_ENTRY") {
-                    return res
-                      .status(409)
-                      .json({ message: "Student number already exists" });
+                    return res.status(409).json({
+                      message: isDuplicateEmailError(insertErr)
+                        ? "Email address is already in use"
+                        : "Student number already exists",
+                    });
                   }
                   console.error("DB error:", insertErr);
                   return res.status(500).json({ message: "Database error" });

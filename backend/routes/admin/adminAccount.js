@@ -16,6 +16,10 @@ import {
   canGrantGovernorEditPermission,
   canManageAdminAccounts,
 } from "../../utils/shared/adminPermissions.js";
+import {
+  isDuplicateEmailError,
+  normalizeStudentEmail,
+} from "../../utils/shared/announcementEmailService.js";
 
 const router = express.Router();
 
@@ -76,6 +80,7 @@ router.get("/", authenticateAdmin, (req, res) => {
       s.student_id AS officer_id,
       s.admin_id,
       s.student_number,
+      s.email,
       s.position,
       s.college,
       s.course,
@@ -393,6 +398,7 @@ router.post("/", authenticateAdmin, async (req, res) => {
   }
   const {
     student_number,
+    email: rawEmail,
     college: requestedCollege,
     course: requestedCourse,
     position,
@@ -409,8 +415,12 @@ router.post("/", authenticateAdmin, async (req, res) => {
   } = req.body;
   const college = resolveAdminCollege(req, requestedCollege);
   const course = typeof requestedCourse === "string" ? requestedCourse.trim() : "";
+  const { email, error: emailError } = normalizeStudentEmail(rawEmail);
   if (requestedCourse != null && typeof requestedCourse !== "string") {
     return res.status(400).json({ message: "Course must be text." });
+  }
+  if (emailError) {
+    return res.status(400).json({ message: emailError });
   }
 
   if (!college && !req.user.is_super_admin) {
@@ -447,11 +457,12 @@ router.post("/", authenticateAdmin, async (req, res) => {
 
     const batchId = await resolveBatchId(connection, year, section);
     const [result] = await connection.query(
-      `INSERT INTO student (admin_id, student_number, position, college, course, batch_id, first_name, last_name, password, role, can_add, can_edit, can_delete, can_moderate, date_created)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      `INSERT INTO student (admin_id, student_number, email, position, college, course, batch_id, first_name, last_name, password, role, can_add, can_edit, can_delete, can_moderate, date_created)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
       [
         req.user.admin_id,
         student_number.trim(),
+        email,
         position.trim(),
         college,
         course || null,
@@ -472,6 +483,13 @@ router.post("/", authenticateAdmin, async (req, res) => {
     req.auditTargetId = result.insertId;
     res.status(201).json({ message: "Officer account created successfully" });
   } catch (err) {
+    if (err.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({
+        message: isDuplicateEmailError(err)
+          ? "Email address is already in use."
+          : "Student number already exists.",
+      });
+    }
     console.error("Error:", err);
     res.status(500).json({ message: "Internal server error" });
   }
@@ -486,6 +504,7 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
   const { id } = req.params;
   const {
     student_number,
+    email: rawEmail,
     college: requestedCollege,
     course: requestedCourse,
     position,
@@ -502,8 +521,12 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
   } = req.body;
   const college = resolveAdminCollege(req, requestedCollege);
   const course = typeof requestedCourse === "string" ? requestedCourse.trim() : "";
+  const { email, error: emailError } = normalizeStudentEmail(rawEmail);
   if (requestedCourse != null && typeof requestedCourse !== "string") {
     return res.status(400).json({ message: "Course must be text." });
+  }
+  if (emailError) {
+    return res.status(400).json({ message: emailError });
   }
 
   if (!college && !req.user.is_super_admin) {
@@ -541,12 +564,13 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
     });
     const collegeFilter = getAdminCollegeFilter(req, "college");
     const updateSql = password
-      ? `UPDATE student SET student_number = ?, position = ?, college = ?, course = ?, batch_id = ?, first_name = ?, last_name = ?, password = ?, role = ?, can_add = ?, can_edit = ?, can_delete = ?, can_moderate = ? WHERE student_id = ?${collegeFilter.sql}`
-      : `UPDATE student SET student_number = ?, position = ?, college = ?, course = ?, batch_id = ?, first_name = ?, last_name = ?, role = ?, can_add = ?, can_edit = ?, can_delete = ?, can_moderate = ? WHERE student_id = ?${collegeFilter.sql}`;
+      ? `UPDATE student SET student_number = ?, email = ?, position = ?, college = ?, course = ?, batch_id = ?, first_name = ?, last_name = ?, password = ?, role = ?, can_add = ?, can_edit = ?, can_delete = ?, can_moderate = ? WHERE student_id = ?${collegeFilter.sql}`
+      : `UPDATE student SET student_number = ?, email = ?, position = ?, college = ?, course = ?, batch_id = ?, first_name = ?, last_name = ?, role = ?, can_add = ?, can_edit = ?, can_delete = ?, can_moderate = ? WHERE student_id = ?${collegeFilter.sql}`;
 
     const updateParams = password
       ? [
           student_number.trim(),
+          email,
           position.trim(),
           college,
           course || null,
@@ -564,6 +588,7 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
         ]
       : [
           student_number.trim(),
+          email,
           position.trim(),
           college,
           course || null,
@@ -589,13 +614,20 @@ router.put("/:id", authenticateAdmin, async (req, res) => {
     await connection.commit();
     res.json({ message: "Officer account updated" });
   } catch (err) {
-    console.error("Error:", err);
     try {
       const connection = db.promise();
       await connection.rollback();
     } catch (rollbackErr) {
       console.error("Rollback failed:", rollbackErr);
     }
+    if (err.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({
+        message: isDuplicateEmailError(err)
+          ? "Email address is already in use."
+          : "Student number already exists.",
+      });
+    }
+    console.error("Error:", err);
     res.status(500).json({ message: "Internal server error" });
   }
 });

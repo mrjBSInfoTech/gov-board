@@ -42,6 +42,29 @@ export const getRoomCollegeMemberVisibilityPredicate = (
     AND LOWER(${studentAlias}.college) = LOWER(${collegeExpression})
   )`;
 
+export const getRoomGovernanceAnnouncementPredicate = ({
+  announcementAlias = "ga",
+  roomAlias = "r",
+  studentAlias = null,
+  extraCollegeSql = "",
+} = {}) => {
+  const collegeVisibility = studentAlias
+    ? getRoomCollegeMemberVisibilityPredicate(
+        `${announcementAlias}.college`,
+        roomAlias,
+        studentAlias,
+      )
+    : getRoomCollegeAudiencePredicate(`${announcementAlias}.college`, roomAlias);
+
+  return `(
+    (${announcementAlias}.visibility_scope = 'global' AND ${roomAlias}.all_colleges = 1)
+    OR (
+      ${announcementAlias}.visibility_scope = 'college'
+      AND ${collegeVisibility}${extraCollegeSql}
+    )
+  )`;
+};
+
 const normalizeCollege = (value) =>
   typeof value === "string" ? value.trim().toLocaleLowerCase() : "";
 
